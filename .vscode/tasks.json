@@ -1,0 +1,82 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev",
+      "dependsOn": [
+        "air: booking",
+        "air: notification",
+        "air: payment",
+        "air: resource",
+        "air: user"
+      ],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    },
+    {
+      "label": "air: booking",
+      "type": "shell",
+      "command": "go tool air --build.cmd 'go build -o ./tmp/booking.exe ./cmd/booking' --build.entrypoint './tmp/booking.exe'",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "group": "air",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "air: notification",
+      "type": "shell",
+      "command": "go tool air --build.cmd 'go build -o ./tmp/notification.exe ./cmd/notification' --build.entrypoint './tmp/notification.exe'",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "group": "air",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "air: payment",
+      "type": "shell",
+      "command": "go tool air --build.cmd 'go build -o ./tmp/payment.exe ./cmd/payment' --build.entrypoint './tmp/payment.exe'",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "group": "air",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "air: resource",
+      "type": "shell",
+      "command": "go tool air --build.cmd 'go build -o ./tmp/resource.exe ./cmd/resource' --build.entrypoint './tmp/resource.exe'",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "group": "air",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "air: user",
+      "type": "shell",
+      "command": "go tool air --build.cmd 'go build -o ./tmp/user.exe ./cmd/user' --build.entrypoint './tmp/user.exe'",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "group": "air",
+        "panel": "dedicated"
+      }
+    }
+  ]
+}
