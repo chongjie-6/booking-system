@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterNotificationRoutes(r *gin.Engine){
+func RegisterNotificationRoutes(r *gin.Engine) {
 	notificationRoutes := r.Group("/notifications")
 	{
 		notificationRoutes.GET("/ping")

@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterPaymentRoutes(r *gin.Engine){
+func RegisterPaymentRoutes(r *gin.Engine) {
 	paymentRoutes := r.Group("/payments")
 	{
 		paymentRoutes.GET("/ping")
