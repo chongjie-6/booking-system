@@ -17,7 +17,8 @@ func main() {
 	r := gin.Default()
 	r.SetTrustedProxies(nil)
 
-	// Apply middleware
+	// Apply middleware & security headers
+	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.CORS())
 	r.Use(response.ErrorHandler())
 	r.Use(middleware.RateLimiter())
