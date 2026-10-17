@@ -75,15 +75,11 @@ func ErrorHandler() gin.HandlerFunc {
 			return
 		}
 
-		err := c.Errors.Last().Err
-		appError, ok := errors.AsType[*AppError](err)
-
-		if ok {
-			c.AbortWithStatusJSON(appError.Status, &Response{
-				Success: false,
-				Error:   &AppError{Code: appError.Code, Message: appError.Message}})
-		} else {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, ErrInternalServerError)
+		appError, ok := errors.AsType[*AppError](c.Errors.Last().Err)
+		if !ok {
+			appError = ErrInternalServerError
 		}
+
+		c.AbortWithStatusJSON(appError.Status, &Response{Success: false, Error: appError})
 	}
 }
