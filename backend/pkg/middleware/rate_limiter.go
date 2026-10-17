@@ -8,6 +8,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// TODO: Infinite ip address add up in memory, either clean up or use something like REDIS
 func RateLimiter() gin.HandlerFunc {
 	type client struct {
 		limiter *rate.Limiter
