@@ -39,6 +39,9 @@ var ErrForbidden = &AppError{Status: http.StatusForbidden, Code: "FORBIDDEN", Me
 // 404 Error, resource not found
 var ErrNotFound = &AppError{Status: http.StatusNotFound, Code: "NOT_FOUND", Message: "resource not found"}
 
+// 429, too many requests
+var ErrTooManyRequests = &AppError{Status: http.StatusTooManyRequests, Code: "TOO_MANY_REQUESTS", Message: "rate limit exceeded"}
+
 // 500 Error, something went wrong with servers
 var ErrInternalServerError = &AppError{Status: http.StatusInternalServerError, Code: "INTERNAL_SERVER_ERROR", Message: "internal server error"}
 

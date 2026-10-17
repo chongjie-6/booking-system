@@ -1,19 +1,28 @@
 package main
 
 import (
+	"booking-system/pkg/middleware"
 	"booking-system/pkg/response"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Create a new Gin router with default middleware
-	r := gin.Default()
+	// Load .env variables into process
+	godotenv.Load()
 
-	// Use error handler as middleware
+	r := gin.Default()
+	r.SetTrustedProxies(nil)
+
+	r.Use(middleware.RateLimiter())
+
+	r.Use(middleware.CORS())
+
 	r.Use(response.ErrorHandler())
 
+	// Return JSON on not found routes
 	r.NoRoute(func(c *gin.Context) {
 		c.Error(response.ErrNotFound)
 	})
