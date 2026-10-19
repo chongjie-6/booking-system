@@ -7,6 +7,7 @@ import (
 	"booking-system/pkg/response"
 	"context"
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -16,6 +17,7 @@ func main() {
 	// Load .env variables into process
 	godotenv.Load()
 
+	gin.SetMode(os.Getenv("GIN_MODE"))
 	ctx := context.Background()
 
 	rdb := redis.New(ctx)
