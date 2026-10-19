@@ -6,7 +6,6 @@ import (
 	"booking-system/pkg/response"
 	"context"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -16,8 +15,7 @@ func main() {
 	// Load .env variables into process
 	godotenv.Load()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	ctx := context.Background()
 
 	rdb := redis.New(ctx)
 	defer rdb.Close()
