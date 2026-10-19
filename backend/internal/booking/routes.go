@@ -1,12 +1,14 @@
 package booking
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 )
 
-func RegisterBookingRoutes(r *gin.Engine) {
+func Routes(r *gin.Engine) {
 	bookingRoutes := r.Group("/bookings")
 	{
-		bookingRoutes.GET("/ping")
+		bookingRoutes.GET("/ping", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"message": "pong"}) })
 	}
 }

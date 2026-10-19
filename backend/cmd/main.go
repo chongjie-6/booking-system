@@ -1,6 +1,7 @@
 package main
 
 import (
+	"booking-system/internal/router"
 	"booking-system/pkg/middleware"
 	"booking-system/pkg/redis"
 	"booking-system/pkg/response"
@@ -43,6 +44,8 @@ func main() {
 			"message": "OK",
 		})
 	})
+
+	router.New(r)
 
 	// Start server on port 8080
 	r.Run()
