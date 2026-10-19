@@ -15,12 +15,8 @@ func New(ctx context.Context) *redis.Client {
 		DB:       0,
 	})
 
-	err := rdb.Ping(ctx).Err()
-
-	if err != nil {
-		rdb.Close()
-		log.Printf("Failed to instantiate redis")
-		return nil
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		log.Printf("redis unreachable, rate limiting disabled until it connects: %v", err)
 	}
 
 	return rdb

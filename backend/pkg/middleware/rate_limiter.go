@@ -3,8 +3,8 @@ package middleware
 import (
 	"booking-system/pkg/response"
 	"context"
-	"crypto/sha1"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -51,9 +51,14 @@ end
 -- Update state
 redis.call('HMSET', key, 'tokens', tokens, 'last_refill', last_refill)
 
+-- Expire once an idle bucket would be full again, which matches a fresh one
+redis.call('EXPIRE', key, math.ceil(math.ceil(capacity / refill_rate) * refill_interval))
+
 -- Return result: allowed (1 or 0) and remaining tokens
 return {allowed, tokens}
 `
+
+var tokenBucket = redis.NewScript(tokenBucketScript)
 
 // TokenBucketConfig holds the configuration for a TokenBucket rate limiter.
 type TokenBucketConfig struct {
@@ -99,8 +104,6 @@ type TokenBucket struct {
 	capacity       int
 	refillRate     float64
 	refillInterval float64 // in seconds
-	scriptSHA      string
-	scriptLoaded   bool
 }
 
 // NewTokenBucket creates a new TokenBucket rate limiter with the given configuration.
@@ -122,27 +125,11 @@ func NewTokenBucket(cfg TokenBucketConfig) *TokenBucket {
 		cfg.RefillInterval = time.Second
 	}
 
-	h := sha1.New()
-	h.Write([]byte(tokenBucketScript))
-	sha := fmt.Sprintf("%x", h.Sum(nil))
-
 	return &TokenBucket{
 		client:         cfg.Client,
 		capacity:       cfg.Capacity,
 		refillRate:     cfg.RefillRate,
 		refillInterval: cfg.RefillInterval.Seconds(),
-		scriptSHA:      sha,
-	}
-}
-
-// ensureScriptLoaded loads the Lua script into Redis if it hasn't been loaded yet.
-func (tb *TokenBucket) ensureScriptLoaded(ctx context.Context) {
-	if !tb.scriptLoaded {
-		sha, err := tb.client.ScriptLoad(ctx, tokenBucketScript).Result()
-		if err == nil {
-			tb.scriptSHA = sha
-			tb.scriptLoaded = true
-		}
 	}
 }
 
@@ -160,26 +147,12 @@ func (tb *TokenBucket) ensureScriptLoaded(ctx context.Context) {
 //	    // Fail open or closed depending on your policy
 //	}
 func (tb *TokenBucket) Allow(ctx context.Context, key string) (bool, float64, error) {
-	tb.ensureScriptLoaded(ctx)
-
 	now := float64(time.Now().UnixMicro()) / 1e6
 
-	args := []interface{}{
-		tb.capacity,
-		tb.refillRate,
-		tb.refillInterval,
-		now,
-	}
-
-	// Try EVALSHA first (faster if script is cached)
-	result, err := tb.client.EvalSha(ctx, tb.scriptSHA, []string{key}, args...).Int64Slice()
+	result, err := tokenBucket.Run(ctx, tb.client, []string{key},
+		tb.capacity, tb.refillRate, tb.refillInterval, now).Int64Slice()
 	if err != nil {
-		// Script not in cache, fall back to EVAL
-		result, err = tb.client.Eval(ctx, tokenBucketScript, []string{key}, args...).Int64Slice()
-		if err != nil {
-			return false, 0, fmt.Errorf("token bucket eval failed: %w", err)
-		}
-		tb.scriptLoaded = false
+		return false, 0, fmt.Errorf("token bucket eval failed: %w", err)
 	}
 
 	allowed := result[0] == 1
@@ -199,17 +172,17 @@ func New(rdb *redis.Client) *TokenBucket {
 
 func RateLimiterMiddleware(limiter *TokenBucket, keyFn func(c *gin.Context) string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		allowed, remaining, err := limiter.Allow(c.Request.Context(), c.ClientIP())
+		allowed, remaining, err := limiter.Allow(c.Request.Context(), keyFn(c))
 		if err != nil {
-			c.Error(err)
-			c.Abort()
+			log.Printf("rate limiter skipped: %v", err)
+			c.Next()
 			return
 		}
 
 		c.Header("X-RateLimit-Limit", strconv.Itoa(limiter.capacity))
 		c.Header("X-RateLimit-Remaining", strconv.FormatFloat(remaining, 'f', 0, 64))
 		c.Header("X-RateLimit-Reset", strconv.FormatInt(
-			time.Now().Add(time.Duration(limiter.refillInterval)).Unix(), 10))
+			time.Now().Add(time.Duration(limiter.refillInterval*float64(time.Second))).Unix(), 10))
 
 		if !allowed {
 			c.Header("Retry-After", "1")
