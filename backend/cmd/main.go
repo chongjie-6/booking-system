@@ -2,6 +2,7 @@ package main
 
 import (
 	"booking-system/internal/router"
+	"booking-system/pkg/db"
 	"booking-system/pkg/middleware"
 	"booking-system/pkg/rdb"
 	"booking-system/pkg/response"
@@ -19,7 +20,8 @@ func main() {
 	gin.SetMode(os.Getenv("GIN_MODE"))
 	ctx := context.Background()
 
-	// Connect to redis
+	// Connect to redis + database
+	db.Connect(ctx)
 	rdb.Connect(ctx)
 
 	// Create a new Gin router with default middleware
