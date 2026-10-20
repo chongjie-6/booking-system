@@ -3,7 +3,7 @@ package main
 import (
 	"booking-system/internal/router"
 	"booking-system/pkg/middleware"
-	"booking-system/pkg/redis"
+	"booking-system/pkg/rdb"
 	"booking-system/pkg/response"
 	"context"
 	"net/http"
@@ -16,12 +16,11 @@ import (
 func main() {
 	// Load .env variables into process
 	godotenv.Load()
-
 	gin.SetMode(os.Getenv("GIN_MODE"))
 	ctx := context.Background()
 
-	rdb := redis.New(ctx)
-	defer rdb.Close()
+	// Connect to redis
+	rdb.Connect(ctx)
 
 	// Create a new Gin router with default middleware
 	r := gin.Default()
@@ -31,7 +30,7 @@ func main() {
 	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.CORS())
 	r.Use(response.ErrorHandler())
-	r.Use(middleware.RateLimiterMiddleware(middleware.New(rdb), func(c *gin.Context) string {
+	r.Use(middleware.RateLimiterMiddleware(middleware.NewBucket(), func(c *gin.Context) string {
 		return c.ClientIP()
 	}))
 

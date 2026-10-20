@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"booking-system/pkg/response"
+	"booking-system/pkg/rdb"
 	"context"
 	"fmt"
 	"log"
@@ -63,15 +64,12 @@ var tokenBucket = redis.NewScript(tokenBucketScript)
 // TokenBucketConfig holds the configuration for a TokenBucket rate limiter.
 type TokenBucketConfig struct {
 	// Capacity is the maximum number of tokens in the bucket.
-	// Default: 10
 	Capacity int
 
 	// RefillRate is the number of tokens added per refill interval.
-	// Default: 1
 	RefillRate float64
 
 	// RefillInterval is the time between refills.
-	// Default: 1 second
 	RefillInterval time.Duration
 
 	// Client is the Redis client to use. Required.
@@ -83,22 +81,6 @@ type TokenBucketConfig struct {
 // It maintains a fixed capacity of tokens that refill at a constant rate.
 // Each request consumes one token. When the bucket is empty, requests are
 // denied until tokens refill.
-//
-// Example:
-//
-//	rdb := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
-//	limiter := ratelimiter.NewTokenBucket(ratelimiter.TokenBucketConfig{
-//	    Capacity:       10,
-//	    RefillRate:     1,
-//	    RefillInterval: time.Second,
-//	    Client:         rdb,
-//	})
-//	allowed, remaining, err := limiter.Allow(ctx, "user:123")
-//	if allowed {
-//	    fmt.Printf("Request allowed. %.0f tokens remaining.\n", remaining)
-//	} else {
-//	    fmt.Println("Request denied. Rate limit exceeded.")
-//	}
 type TokenBucket struct {
 	client         *redis.Client
 	capacity       int
@@ -107,13 +89,6 @@ type TokenBucket struct {
 }
 
 // NewTokenBucket creates a new TokenBucket rate limiter with the given configuration.
-//
-// Default values are applied for zero-value fields:
-//   - Capacity: 10
-//   - RefillRate: 1.0
-//   - RefillInterval: 1 second
-//
-// The Client field is required and must not be nil.
 func NewTokenBucket(cfg TokenBucketConfig) *TokenBucket {
 	if cfg.Capacity == 0 {
 		cfg.Capacity = 10
@@ -138,14 +113,6 @@ func NewTokenBucket(cfg TokenBucketConfig) *TokenBucket {
 // It atomically checks and updates the token bucket state in Redis.
 // Returns whether the request is allowed, the number of remaining tokens,
 // and any error encountered.
-//
-// Example:
-//
-//	allowed, remaining, err := limiter.Allow(ctx, "user:123")
-//	if err != nil {
-//	    log.Printf("Rate limiter error: %v", err)
-//	    // Fail open or closed depending on your policy
-//	}
 func (tb *TokenBucket) Allow(ctx context.Context, key string) (bool, float64, error) {
 	now := float64(time.Now().UnixMicro()) / 1e6
 
@@ -161,9 +128,9 @@ func (tb *TokenBucket) Allow(ctx context.Context, key string) (bool, float64, er
 	return allowed, remaining, nil
 }
 
-func New(rdb *redis.Client) *TokenBucket {
+func NewBucket() *TokenBucket {
 	return NewTokenBucket(TokenBucketConfig{
-		Client:         rdb,
+		Client:         rdb.Client,
 		Capacity:       20,
 		RefillRate:     10,
 		RefillInterval: time.Second,
