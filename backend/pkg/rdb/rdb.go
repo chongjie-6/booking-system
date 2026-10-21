@@ -13,9 +13,9 @@ var Client *redis.Client
 
 func Connect(ctx context.Context) {
 	Client = redis.NewClient(&redis.Options{
-		Addr:     os.Getenv("REDIS_ADDRESS"),
-		Password: os.Getenv("REDIS_PASSWORD"),
-		DB:       0,
+		Addr:          os.Getenv("REDIS_ADDRESS"),
+		Password:      os.Getenv("REDIS_PASSWORD"),
+		DB:            0,
 		DialTimeout:   200 * time.Millisecond,
 		DialerRetries: 1,
 		MaxRetries:    -1,

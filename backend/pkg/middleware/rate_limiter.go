@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"booking-system/pkg/response"
 	"booking-system/pkg/rdb"
+	"booking-system/pkg/response"
 	"context"
 	"fmt"
 	"log"
