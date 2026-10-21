@@ -39,7 +39,8 @@ tmp_dir = "tmp"
     entrypoint = ["tmp\\main.exe"]
     full_bin = ""
     post_cmd = []
-    pre_cmd = []
+    # go fmt only on the first build; the marker is removed with tmp/ when air exits
+    pre_cmd = ["if (-not (Test-Path tmp/.fmt-done)) { go fmt ./...; New-Item -Force tmp/.fmt-done | Out-Null }"]
 
 [color]
   app = ""
@@ -55,7 +56,7 @@ tmp_dir = "tmp"
   time = false
 
 [misc]
-  clean_on_exit = false
+  clean_on_exit = true
 
 [proxy]
   app_port = 0
