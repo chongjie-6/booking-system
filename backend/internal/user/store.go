@@ -29,7 +29,7 @@ func dbCreateUser(ctx context.Context, user User) (User, error) {
 func dbGetUser(ctx context.Context, userID string) (User, error) {
 	rows, _ := db.Pool.Query(ctx, `
 	SELECT 
-	user_id, user_role, first_name, last_name, email, created_at, updated_at
+	user_id, user_role, hashed_password, first_name, last_name, email, created_at, updated_at
 	FROM users
 	WHERE user_id = @user_id
 	`, pgx.NamedArgs{
