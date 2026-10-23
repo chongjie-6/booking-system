@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var ErrEmailTaken = errors.New("email already registered")
@@ -24,14 +23,7 @@ func dbCreateUser(ctx context.Context, user User) (User, error) {
 		"last_name":       user.LastName,
 		"email":           user.Email,
 	})
-	u, err := pgx.CollectOneRow(rows, pgx.RowToStructByName[User])
-
-	// 23505 = unique violation; the index on lower(email) catches duplicates
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "users_email_key" {
-		return User{}, ErrEmailTaken
-	}
-	return u, err
+	return pgx.CollectOneRow(rows, pgx.RowToStructByName[User])
 }
 
 func dbGetUser(ctx context.Context, userID string) (User, error) {
@@ -42,6 +34,27 @@ func dbGetUser(ctx context.Context, userID string) (User, error) {
 	WHERE user_id = @user_id
 	`, pgx.NamedArgs{
 		"user_id": userID,
+	})
+
+	return pgx.CollectOneRow(rows, pgx.RowToStructByName[User])
+}
+
+// A nil field is sent as NULL, so COALESCE keeps the current value.
+func dbUpdateUser(ctx context.Context, userID string, req PatchUserRequest, hashedPassword *string) (User, error) {
+	rows, _ := db.Pool.Query(ctx, `
+	UPDATE users SET
+	first_name = COALESCE(@first_name, first_name),
+	last_name = COALESCE(@last_name, last_name),
+	email = COALESCE(@email, email),
+	hashed_password = COALESCE(@hashed_password, hashed_password)
+	WHERE user_id = @user_id
+	RETURNING *
+	`, pgx.NamedArgs{
+		"user_id":         userID,
+		"first_name":      req.FirstName,
+		"last_name":       req.LastName,
+		"email":           req.Email,
+		"hashed_password": hashedPassword,
 	})
 
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[User])

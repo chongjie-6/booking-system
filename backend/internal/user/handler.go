@@ -1,6 +1,7 @@
 package user
 
 import (
+	"booking-system/pkg/auth"
 	"booking-system/pkg/response"
 	"errors"
 	"net/http"
@@ -28,67 +29,76 @@ func CreateUser(c *gin.Context) {
 	var req CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(response.BadRequest(err))
-		c.Abort()
 		return
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	// max=72 counts characters, bcrypt counts bytes, so emoji/accents can still overflow
+	newUser, err := CreateUserService(c, req)
 	if errors.Is(err, bcrypt.ErrPasswordTooLong) {
 		c.Error(response.NewError(http.StatusBadRequest, "password is too long"))
-		c.Abort()
 		return
 	}
-	if err != nil {
-		c.Error(response.ErrInternalServerError)
-		c.Abort()
-		return
-	}
-	hashed := string(hash)
-
-	newUser, err := dbCreateUser(c, User{
-		UserRole:       "user",
-		HashedPassword: &hashed,
-		FirstName:      req.FirstName,
-		LastName:       req.LastName,
-		Email:          req.Email,
-	})
 	if errors.Is(err, ErrEmailTaken) {
 		c.Error(response.NewError(http.StatusConflict, "user already exists"))
-		c.Abort()
 		return
 	}
 	if err != nil {
 		c.Error(response.ErrInternalServerError)
-		c.Abort()
 		return
 	}
 
 	response.Created(c, newUser)
 }
 
-type GetUserRequest struct {
-	UserID string `json:"user_id" binding:"required,uuid"`
-}
-
 // Get a users' details
 func GetUser(c *gin.Context) {
-	var req GetUserRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(response.BadRequest(err))
-		c.Abort()
-		return
-	}
+	user, _ := c.MustGet("user").(*auth.UserInfo)
 
-	u, err := dbGetUser(c, req.UserID)
+	u, err := GetUserService(c, user.UserID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		c.Error(response.ErrNotFound)
-		c.Abort()
 		return
 	}
 	if err != nil {
 		c.Error(response.ErrInternalServerError)
-		c.Abort()
+		return
+	}
+
+	response.Ok(c, u, nil)
+}
+
+// PatchUserRequest holds the fields a user may change; omitted fields stay as they are.
+type PatchUserRequest struct {
+	FirstName *string `json:"firstName" binding:"omitempty,min=1"`
+	LastName  *string `json:"lastName" binding:"omitempty,min=1"`
+	Email     *string `json:"email" binding:"omitempty,email"`
+	Password  *string `json:"password" binding:"omitempty,min=8,max=72"`
+}
+
+// Updates the signed-in user's details; a taken email returns 409
+func PatchUser(c *gin.Context) {
+	user, _ := c.MustGet("user").(*auth.UserInfo)
+
+	var req PatchUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(response.BadRequest(err))
+		return
+	}
+
+	u, err := UpdateUserService(c, user.UserID, req)
+	if errors.Is(err, bcrypt.ErrPasswordTooLong) {
+		c.Error(response.NewError(http.StatusBadRequest, "password is too long"))
+		return
+	}
+	if errors.Is(err, ErrEmailTaken) {
+		c.Error(response.NewError(http.StatusConflict, "email already in use"))
+		return
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		c.Error(response.ErrNotFound)
+		return
+	}
+	if err != nil {
+		c.Error(response.ErrInternalServerError)
 		return
 	}
 

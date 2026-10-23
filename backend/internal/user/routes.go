@@ -1,6 +1,7 @@
 package user
 
 import (
+	"booking-system/pkg/middleware"
 	"github.com/gin-gonic/gin"
 )
 
@@ -10,4 +11,6 @@ func Routes(r *gin.Engine) {
 	userRoutes.GET("/ping", Ping)
 
 	userRoutes.POST("", CreateUser)
+	userRoutes.GET("", middleware.Auth(), GetUser)
+	userRoutes.PATCH("", middleware.Auth(), PatchUser)
 }
