@@ -22,6 +22,7 @@ func main() {
 
 	// Connect to redis + database
 	db.Connect(ctx)
+	db.Migrate()
 	rdb.Connect(ctx)
 
 	// Create a new Gin router with default middleware
