@@ -51,5 +51,11 @@ func UpdateUserService(ctx context.Context, userID string, req PatchUserRequest)
 		hashed = &h
 	}
 
-	return dbUpdateUser(ctx, userID, req, hashed)
+	u, err := dbUpdateUser(ctx, userID, req, hashed)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "users_email_key" {
+		return User{}, ErrEmailTaken
+	}
+
+	return u, err
 }
