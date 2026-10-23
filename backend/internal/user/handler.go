@@ -16,14 +16,6 @@ func Ping(c *gin.Context) {
 	response.Ok(c, gin.H{"message": "pong"}, nil)
 }
 
-// CreateUserRequest is what a client may send to sign up. bcrypt rejects passwords over 72 bytes.
-type CreateUserRequest struct {
-	FirstName string `json:"firstName" binding:"required"`
-	LastName  string `json:"lastName" binding:"required"`
-	Email     string `json:"email" binding:"required,email"`
-	Password  string `json:"password" binding:"required,min=8,max=72"`
-}
-
 // Creates a user; a duplicate email returns 409
 func CreateUser(c *gin.Context) {
 	var req CreateUserRequest
@@ -64,14 +56,6 @@ func GetUser(c *gin.Context) {
 	}
 
 	response.Ok(c, u, nil)
-}
-
-// PatchUserRequest holds the fields a user may change; omitted fields stay as they are.
-type PatchUserRequest struct {
-	FirstName *string `json:"firstName" binding:"omitempty,min=1"`
-	LastName  *string `json:"lastName" binding:"omitempty,min=1"`
-	Email     *string `json:"email" binding:"omitempty,email"`
-	Password  *string `json:"password" binding:"omitempty,min=8,max=72"`
 }
 
 // Updates the signed-in user's details; a taken email returns 409
