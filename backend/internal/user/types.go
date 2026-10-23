@@ -10,8 +10,9 @@ type CreateUserRequest struct {
 
 // PatchUserRequest holds the fields a user may change; omitted fields stay as they are.
 type PatchUserRequest struct {
-	FirstName *string `json:"firstName" binding:"omitempty,min=1"`
-	LastName  *string `json:"lastName" binding:"omitempty,min=1"`
-	Email     *string `json:"email" binding:"omitempty,email"`
-	Password  *string `json:"password" binding:"omitempty,min=8,max=72"`
+	FirstName   *string `json:"firstName" binding:"omitempty,min=1"`
+	LastName    *string `json:"lastName" binding:"omitempty,min=1"`
+	Email       *string `json:"email" binding:"omitempty,email"`
+	NewPassword *string `json:"newPassword" binding:"omitempty,min=8,max=72"`
+	OldPassword *string `json:"currentPassword" binding:"required_with=NewPassword"`
 }

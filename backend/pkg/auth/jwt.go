@@ -3,9 +3,12 @@ package auth
 import (
 	"crypto/ecdsa"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -68,7 +71,7 @@ func ParseJWT(token string) (*Claims, error) {
 }
 
 // Uses crypto's random package to generate random salt
-func GenerateSalt(saltSize uint32) []byte {
+func generateSalt(saltSize uint32) []byte {
 	salt := make([]byte, saltSize)
 	_, _ = rand.Read(salt)
 	return salt
@@ -83,8 +86,7 @@ func HashPassword(password string) string {
 		KeyLength:  32,
 	}
 
-	salt := GenerateSalt(16)
-
+	salt := generateSalt(16)
 	hash := argon2.IDKey([]byte(password), salt, argonConfig.TimeCost, argonConfig.MemoryCost, argonConfig.Threads, argonConfig.KeyLength)
 	encodedHash := fmt.Sprintf(
 		"$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
@@ -97,4 +99,39 @@ func HashPassword(password string) string {
 	)
 
 	return encodedHash
+}
+
+// Re-hashes password with the salt and settings stored in encodedHash and compares the results.
+func VerifyPassword(password, encodedHash string) (bool, error) {
+	parts := strings.Split(encodedHash, "$")
+	if len(parts) != 6 || parts[1] != "argon2id" {
+		return false, errors.New("invalid argon2id hash")
+	}
+
+	var version int
+	if _, err := fmt.Sscanf(parts[2], "v=%d", &version); err != nil || version != argon2.Version {
+		return false, errors.New("unsupported argon2 version")
+	}
+
+	var memoryCost, timeCost uint32
+	var threads uint8
+	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memoryCost, &timeCost, &threads); err != nil {
+		return false, err
+	}
+
+	// decode salt
+	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
+	if err != nil {
+		return false, err
+	}
+
+	// decode hash
+	want, err := base64.RawStdEncoding.DecodeString(parts[5])
+	if err != nil {
+		return false, err
+	}
+
+	// constant-time compare, so response time doesn't reveal how much of the hash matched
+	got := argon2.IDKey([]byte(password), salt, timeCost, memoryCost, threads, uint32(len(want)))
+	return subtle.ConstantTimeCompare(got, want) == 1, nil
 }

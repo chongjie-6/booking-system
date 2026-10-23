@@ -112,7 +112,7 @@ func fieldMessage(fe validator.FieldError) string {
 		unit = " characters"
 	}
 	switch fe.Tag() {
-	case "required":
+	case "required", "required_with":
 		return f + " is required"
 	case "email":
 		return f + " must be a valid email address"

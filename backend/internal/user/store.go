@@ -3,12 +3,9 @@ package user
 import (
 	"booking-system/pkg/db"
 	"context"
-	"errors"
 
 	"github.com/jackc/pgx/v5"
 )
-
-var ErrEmailTaken = errors.New("email already registered")
 
 func dbCreateUser(ctx context.Context, user User) (User, error) {
 	rows, _ := db.Pool.Query(ctx, `
@@ -37,6 +34,20 @@ func dbGetUser(ctx context.Context, userID string) (User, error) {
 	})
 
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[User])
+}
+
+// Returns a nil hash when the user has no password set, and pgx.ErrNoRows when the user doesn't exist.
+func dbGetPasswordHash(ctx context.Context, userID string) (*string, error) {
+	var hash *string
+	err := db.Pool.QueryRow(ctx, `
+	SELECT 
+	hashed_password 
+	FROM users 
+	WHERE user_id = @user_id
+	`, pgx.NamedArgs{
+		"user_id": userID,
+	}).Scan(&hash)
+	return hash, err
 }
 
 // A nil field is sent as NULL, so COALESCE keeps the current value.

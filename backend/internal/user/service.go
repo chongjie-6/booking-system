@@ -8,6 +8,11 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
+var (
+	ErrEmailTaken    = errors.New("email already registered")
+	ErrWrongPassword = errors.New("current password is incorrect")
+)
+
 // Hashes the password and stores a new user with the "user" role.
 func CreateUserService(ctx context.Context, req CreateUserRequest) (User, error) {
 	hashed := auth.HashPassword(req.Password)
@@ -32,11 +37,27 @@ func GetUserService(ctx context.Context, userID string) (User, error) {
 	return dbGetUser(ctx, userID)
 }
 
-// Hashes a new password if one was sent, then applies the changes.
+// Checks the current password and hashes the new one if one was sent, then applies the changes.
 func UpdateUserService(ctx context.Context, userID string, req PatchUserRequest) (User, error) {
 	var hashed *string
-	if req.Password != nil {
-		h := auth.HashPassword(*req.Password)
+	if req.NewPassword != nil && req.OldPassword != nil {
+		current, err := dbGetPasswordHash(ctx, userID)
+		if err != nil {
+			return User{}, err
+		}
+		if current == nil {
+			return User{}, ErrWrongPassword
+		}
+
+		ok, err := auth.VerifyPassword(*req.OldPassword, *current)
+		if err != nil {
+			return User{}, err
+		}
+		if !ok {
+			return User{}, ErrWrongPassword
+		}
+
+		h := auth.HashPassword(*req.NewPassword)
 		hashed = &h
 	}
 

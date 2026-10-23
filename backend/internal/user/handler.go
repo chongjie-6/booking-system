@@ -68,6 +68,10 @@ func PatchUser(c *gin.Context) {
 		c.Error(response.NewError(http.StatusConflict, "email already in use"))
 		return
 	}
+	if errors.Is(err, ErrWrongPassword) {
+		c.Error(response.NewError(http.StatusForbidden, "password is incorrect"))
+		return
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		c.Error(response.ErrNotFound)
 		return
