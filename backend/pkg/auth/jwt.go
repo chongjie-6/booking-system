@@ -33,11 +33,22 @@ type Argon2Configuration struct {
 	KeyLength  uint32
 }
 
+type AuthCookie struct {
+	CookieName string
+	JWT        string
+	MaxAge     int
+	Path       string
+	Domain     string
+	Secure     bool
+	HTTPOnly   bool
+}
+
 // Parsed on first use, after main has loaded .env
 var privateKey = sync.OnceValues(func() (*ecdsa.PrivateKey, error) {
 	return jwt.ParseECPrivateKeyFromPEM([]byte(os.Getenv("JWT_PRIVATE_KEY")))
 })
 
+// NewJWT signs an ES256 token carrying the user's ID and role. It expires after 15 minutes.
 func NewJWT(userID string, userRole string) (string, error) {
 	key, err := privateKey()
 	if err != nil {
@@ -47,7 +58,7 @@ func NewJWT(userID string, userRole string) (string, error) {
 	t := jwt.New(jwt.SigningMethodES256)
 
 	t.Claims = &Claims{
-		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 1)),
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 15)),
 		Sub: &UserInfo{
 			UserID:   userID,
 			UserRole: userRole,

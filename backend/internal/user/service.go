@@ -4,14 +4,32 @@ import (
 	"booking-system/pkg/auth"
 	"context"
 	"errors"
+	"net/http"
 
+	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var (
 	ErrEmailTaken    = errors.New("email already registered")
 	ErrWrongPassword = errors.New("current password is incorrect")
+	ErrBadToken      = errors.New("jwt could not be issued")
 )
+
+func AttachUserCookies(ctx *gin.Context, userID string, userRole string) error {
+	// issue new jwt
+	jwt, err := auth.NewJWT(userID, userRole)
+
+	if err != nil {
+		return ErrBadToken
+	}
+
+	// set jwt
+	cookie := &auth.AuthCookie{CookieName: "auth_token", JWT: jwt, MaxAge: 15 * 60, Secure: true, HTTPOnly: true}
+	ctx.SetSameSite(http.SameSiteLaxMode)
+	ctx.SetCookie(cookie.CookieName, cookie.JWT, cookie.MaxAge, cookie.Path, cookie.Domain, cookie.Secure, cookie.HTTPOnly)
+	return nil
+}
 
 // Hashes the password and stores a new user with the "user" role.
 func CreateUserService(ctx context.Context, req CreateUserRequest) (User, error) {

@@ -3,7 +3,6 @@ package middleware
 import (
 	"booking-system/pkg/auth"
 	"booking-system/pkg/response"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -12,8 +11,8 @@ import (
 // and stores the token's auth.UserInfo under "user" for later handlers.
 func Auth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		token, ok := strings.CutPrefix(c.GetHeader("Authorization"), "Bearer ")
-		if !ok {
+		token, err := c.Cookie("auth_token")
+		if err != nil {
 			c.Error(response.ErrUnauthorized)
 			c.Abort()
 			return

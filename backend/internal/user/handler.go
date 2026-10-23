@@ -4,6 +4,7 @@ import (
 	"booking-system/pkg/auth"
 	"booking-system/pkg/response"
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -23,13 +24,23 @@ func CreateUser(c *gin.Context) {
 		return
 	}
 
+	// create user in database
 	newUser, err := CreateUserService(c, req)
+
 	if errors.Is(err, ErrEmailTaken) {
 		c.Error(response.NewError(http.StatusConflict, "user already exists"))
 		return
 	}
 	if err != nil {
 		c.Error(response.ErrInternalServerError)
+		return
+	}
+
+	//attach cookies to response (must be in headers)
+	err = AttachUserCookies(c, newUser.UserID, newUser.UserRole)
+	if errors.Is(err, ErrBadToken) {
+		log.Printf("create user: %v", err)
+		c.Error(response.NewError(http.StatusInternalServerError, "account created, but we couldn't sign you in. Please log in"))
 		return
 	}
 
