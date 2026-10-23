@@ -8,7 +8,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // Ping returns pong
@@ -25,10 +24,6 @@ func CreateUser(c *gin.Context) {
 	}
 
 	newUser, err := CreateUserService(c, req)
-	if errors.Is(err, bcrypt.ErrPasswordTooLong) {
-		c.Error(response.NewError(http.StatusBadRequest, "password is too long"))
-		return
-	}
 	if errors.Is(err, ErrEmailTaken) {
 		c.Error(response.NewError(http.StatusConflict, "user already exists"))
 		return
@@ -69,10 +64,6 @@ func PatchUser(c *gin.Context) {
 	}
 
 	u, err := UpdateUserService(c, user.UserID, req)
-	if errors.Is(err, bcrypt.ErrPasswordTooLong) {
-		c.Error(response.NewError(http.StatusBadRequest, "password is too long"))
-		return
-	}
 	if errors.Is(err, ErrEmailTaken) {
 		c.Error(response.NewError(http.StatusConflict, "email already in use"))
 		return

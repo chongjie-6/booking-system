@@ -1,23 +1,16 @@
 package user
 
 import (
+	"booking-system/pkg/auth"
 	"context"
 	"errors"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // Hashes the password and stores a new user with the "user" role.
 func CreateUserService(ctx context.Context, req CreateUserRequest) (User, error) {
-	// hash the password max=72 counts characters, bcrypt counts bytes, so emoji/accents can still overflow
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-
-	if err != nil {
-		return User{}, err
-	}
-
-	hashed := string(hash)
+	hashed := auth.HashPassword(req.Password)
 
 	u, err := dbCreateUser(ctx, User{
 		UserRole:       "user",
@@ -43,11 +36,7 @@ func GetUserService(ctx context.Context, userID string) (User, error) {
 func UpdateUserService(ctx context.Context, userID string, req PatchUserRequest) (User, error) {
 	var hashed *string
 	if req.Password != nil {
-		hash, err := bcrypt.GenerateFromPassword([]byte(*req.Password), bcrypt.DefaultCost)
-		if err != nil {
-			return User{}, err
-		}
-		h := string(hash)
+		h := auth.HashPassword(*req.Password)
 		hashed = &h
 	}
 
