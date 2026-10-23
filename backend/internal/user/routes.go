@@ -2,6 +2,7 @@ package user
 
 import (
 	"booking-system/pkg/middleware"
+
 	"github.com/gin-gonic/gin"
 )
 
