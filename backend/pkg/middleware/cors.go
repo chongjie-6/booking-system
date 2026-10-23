@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// CORS allows exactly one origin: the whole value of ALLOWED_ORIGINS. It isn't split on commas.
 func CORS() gin.HandlerFunc {
 	var ev = os.Getenv("ALLOWED_ORIGINS")
 	return cors.New(cors.Config{

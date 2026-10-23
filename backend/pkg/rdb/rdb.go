@@ -11,6 +11,8 @@ import (
 
 var Client *redis.Client
 
+// Connect doesn't exit if Redis is down, because the rate limiter lets requests through without it.
+// The short dial timeout and disabled retries stop a missing Redis from slowing down every request.
 func Connect(ctx context.Context) {
 	Client = redis.NewClient(&redis.Options{
 		Addr:          os.Getenv("REDIS_ADDRESS"),

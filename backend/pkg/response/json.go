@@ -141,6 +141,8 @@ func Created(c *gin.Context, data any) {
 	})
 }
 
+// ErrorHandler runs after the handlers and sends the last c.Error as the JSON error response.
+// Errors that aren't an *AppError become a 500, so internal details never reach the client.
 func ErrorHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
