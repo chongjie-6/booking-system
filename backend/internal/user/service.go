@@ -17,17 +17,19 @@ var (
 )
 
 func AttachUserCookies(ctx *gin.Context, userID string, userRole string) error {
-	// issue new jwt
-	jwt, err := auth.NewJWT(userID, userRole)
+	// issue new access + refresh
+	access, refresh, err := auth.MintTokens(userID, userRole)
 
 	if err != nil {
 		return ErrBadToken
 	}
 
-	// set jwt
-	cookie := &auth.AuthCookie{CookieName: "auth_token", JWT: jwt, MaxAge: 15 * 60, Secure: true, HTTPOnly: true}
+	// set access and refresh cookies
+	a := &auth.AuthCookie{CookieName: "access_token", JWT: access, MaxAge: 15 * 60, Secure: true, HTTPOnly: true}
+	r := &auth.AuthCookie{CookieName: "refresh_token", JWT: refresh, MaxAge: 60 * 60 * 24 * 7, Secure: true, HTTPOnly: true}
 	ctx.SetSameSite(http.SameSiteLaxMode)
-	ctx.SetCookie(cookie.CookieName, cookie.JWT, cookie.MaxAge, cookie.Path, cookie.Domain, cookie.Secure, cookie.HTTPOnly)
+	ctx.SetCookie(a.CookieName, a.JWT, a.MaxAge, a.Path, a.Domain, a.Secure, a.HTTPOnly)
+	ctx.SetCookie(r.CookieName, r.JWT, r.MaxAge, r.Path, r.Domain, r.Secure, r.HTTPOnly)
 	return nil
 }
 

@@ -11,7 +11,7 @@ import (
 // and stores the token's auth.UserInfo under "user" for later handlers.
 func Auth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		token, err := c.Cookie("auth_token")
+		token, err := c.Cookie("access_token")
 		if err != nil {
 			c.Error(response.ErrUnauthorized)
 			c.Abort()

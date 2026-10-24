@@ -3,8 +3,10 @@ package auth
 import (
 	"crypto/ecdsa"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -48,8 +50,8 @@ var privateKey = sync.OnceValues(func() (*ecdsa.PrivateKey, error) {
 	return jwt.ParseECPrivateKeyFromPEM([]byte(os.Getenv("JWT_PRIVATE_KEY")))
 })
 
-// NewJWT signs an ES256 token carrying the user's ID and role. It expires after 15 minutes.
-func NewJWT(userID string, userRole string) (string, error) {
+// NewAccessToken signs an ES256 token carrying the user's ID and role. It expires after 15 minutes.
+func NewAccessToken(userID string, userRole string) (string, error) {
 	key, err := privateKey()
 	if err != nil {
 		return "", err
@@ -65,6 +67,35 @@ func NewJWT(userID string, userRole string) (string, error) {
 		},
 	}
 	return t.SignedString(key)
+}
+
+// Refresh token signs an ES256 token. It expires after a week
+func NewRefreshToken() (string, error) {
+	key, err := privateKey()
+	if err != nil {
+		return "", err
+	}
+
+	t := jwt.New(jwt.SigningMethodES256)
+
+	t.Claims = &Claims{
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 60 * 24 * 7)),
+	}
+	return t.SignedString(key)
+}
+
+// Mints a new refresh and access token, access tokens last 15 mins and refresh tokens last a week
+func MintTokens(userID string, userRole string) (string, string, error) {
+	refresh, refreshErr := NewRefreshToken()
+	if refreshErr != nil {
+		return "", "", refreshErr
+	}
+
+	access, accessErr := NewAccessToken(userID, userRole)
+	if accessErr != nil {
+		return "", "", accessErr
+	}
+	return access, refresh, nil
 }
 
 // ParseJWT verifies the signature and expiry and returns the claims
@@ -145,4 +176,10 @@ func VerifyPassword(password, encodedHash string) (bool, error) {
 	// constant-time compare, so response time doesn't reveal how much of the hash matched
 	got := argon2.IDKey([]byte(password), salt, timeCost, memoryCost, threads, uint32(len(want)))
 	return subtle.ConstantTimeCompare(got, want) == 1, nil
+}
+
+// sha 256 hash instead of argon2/bcrypt the entropy of refresh tokens makes them almost impossible to brute force
+func HashRefreshToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }
