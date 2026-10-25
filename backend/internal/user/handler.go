@@ -94,3 +94,26 @@ func PatchUser(c *gin.Context) {
 
 	response.Ok(c, u, nil)
 }
+
+// Takes a refresh token and generates a new access + refresh token
+func RefreshToken(c *gin.Context) {
+	refreshToken, err := c.Cookie("refresh_token")
+	if err != nil {
+		c.Error(response.ErrUnauthorized)
+	}
+
+	// validate the refresh token against the one in the database
+	row, err := ValidateRefreshTokenService(c, refreshToken)
+	if err != nil {
+		c.Error(response.ErrBadRequest)
+		return
+	}
+
+	// Mint new access and refresh tokens
+	AttachUserCookies(c, row.UserID, row.UserRole)
+
+	// rotate refresh tokens in the database
+	RotateRefreshTokenService(c, row, refreshToken)
+
+	response.Ok(c, nil, nil)
+}

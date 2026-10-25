@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -14,6 +15,9 @@ var (
 	ErrEmailTaken    = errors.New("email already registered")
 	ErrWrongPassword = errors.New("current password is incorrect")
 	ErrBadToken      = errors.New("jwt could not be issued")
+
+	ErrRefreshExpired    = errors.New("refresh token has expired or is revoked")
+	ErrSuspiciousRefresh = errors.New("refresh token used from a different client")
 )
 
 func AttachUserCookies(ctx *gin.Context, userID string, userRole string) error {
@@ -88,4 +92,42 @@ func UpdateUserService(ctx context.Context, userID string, req PatchUserRequest)
 	}
 
 	return u, err
+}
+
+// fetches the database and validates against token stored in the database
+func ValidateRefreshTokenService(ctx *gin.Context, refreshToken string) (RefreshTokenRow, error) {
+	// hash the refreshToken and then find corresponding row in the database
+	hashedRefresh := auth.HashRefreshToken(refreshToken)
+	refresh, err := dbGetRefreshToken(ctx, hashedRefresh)
+	if err != nil {
+		return RefreshTokenRow{}, err
+	}
+
+	if refresh.IsRevoked || time.Now().After(refresh.ExpiresAt) {
+		return RefreshTokenRow{}, ErrRefreshExpired
+	}
+
+	//TODO implement notifications to user email about suspicious login
+	if refresh.IPAddress == nil || *refresh.IPAddress != ctx.ClientIP() ||
+		refresh.UserAgent == nil || *refresh.UserAgent != ctx.Request.UserAgent() {
+		return RefreshTokenRow{}, ErrSuspiciousRefresh
+	}
+
+	return refresh, nil
+}
+
+// rotates refresh token hash, delete + insert
+func RotateRefreshTokenService(ctx context.Context, refreshToken RefreshTokenRow, oldRefreshHash string) (bool, error) {
+	// insert new refresh token
+	_, createErr := dbCreateRefreshToken(ctx, refreshToken)
+
+	if createErr != nil {
+		return false, createErr
+	}
+
+	_, delErr := dbSoftDeleteRefreshToken(ctx, oldRefreshHash)
+	if delErr != nil {
+		return false, createErr
+	}
+	return true, nil
 }
