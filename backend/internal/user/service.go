@@ -3,7 +3,6 @@ package user
 import (
 	"booking-system/pkg/auth"
 	"context"
-	"crypto/sha256"
 	"errors"
 	"net/http"
 	"time"
