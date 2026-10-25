@@ -3,6 +3,7 @@ package user
 import (
 	"booking-system/pkg/auth"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"net/http"
 	"time"
@@ -117,7 +118,7 @@ func ValidateRefreshTokenService(ctx *gin.Context, refreshToken string) (Refresh
 }
 
 // rotates refresh token hash, delete + insert
-func RotateRefreshTokenService(ctx context.Context, refreshToken RefreshTokenRow, oldRefreshHash string) (bool, error) {
+func RotateRefreshTokenService(ctx context.Context, refreshToken RefreshTokenRow, oldRefreshToken string) (bool, error) {
 	// insert new refresh token
 	_, createErr := dbCreateRefreshToken(ctx, refreshToken)
 
@@ -125,9 +126,10 @@ func RotateRefreshTokenService(ctx context.Context, refreshToken RefreshTokenRow
 		return false, createErr
 	}
 
+	oldRefreshHash := auth.HashRefreshToken(oldRefreshToken)
 	_, delErr := dbSoftDeleteRefreshToken(ctx, oldRefreshHash)
 	if delErr != nil {
-		return false, createErr
+		return false, delErr
 	}
 	return true, nil
 }

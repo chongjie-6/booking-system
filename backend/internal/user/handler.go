@@ -100,6 +100,7 @@ func RefreshToken(c *gin.Context) {
 	refreshToken, err := c.Cookie("refresh_token")
 	if err != nil {
 		c.Error(response.ErrUnauthorized)
+		return
 	}
 
 	// validate the refresh token against the one in the database
@@ -110,10 +111,17 @@ func RefreshToken(c *gin.Context) {
 	}
 
 	// Mint new access and refresh tokens
-	AttachUserCookies(c, row.UserID, row.UserRole)
+	jwtErr := AttachUserCookies(c, row.UserID, row.UserRole)
+	if jwtErr != nil {
+		c.Error(response.ErrInternalServerError)
+		return
+	}
 
 	// rotate refresh tokens in the database
-	RotateRefreshTokenService(c, row, refreshToken)
-
+	_, tokenErr := RotateRefreshTokenService(c, row, refreshToken)
+	if tokenErr != nil {
+		c.Error(response.ErrInternalServerError)
+		return
+	}
 	response.Ok(c, nil, nil)
 }

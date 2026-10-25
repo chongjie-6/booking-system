@@ -115,6 +115,7 @@ func dbSoftDeleteRefreshToken(ctx context.Context, oldRefreshHash string) (Refre
 	refresh_tokens 
 	SET is_revoked = true
 	WHERE token_hash = @token_hash
+	RETURNING *
 	`, pgx.NamedArgs{
 		"token_hash": oldRefreshHash,
 	})
