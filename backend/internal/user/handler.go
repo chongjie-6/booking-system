@@ -2,6 +2,7 @@ package user
 
 import (
 	"booking-system/pkg/auth"
+	"booking-system/pkg/db"
 	"booking-system/pkg/response"
 	"errors"
 	"log"
@@ -36,14 +37,17 @@ func CreateUser(c *gin.Context) {
 		return
 	}
 
-	//attach cookies to response (must be in headers)
-	err = AttachUserCookies(c, newUser.UserID, newUser.UserRole)
-	if errors.Is(err, ErrBadToken) {
+	access, refresh, row, err := MintUserTokens(c, newUser.UserID, newUser.UserRole)
+	if err == nil {
+		_, err = dbInsertRefreshToken(c, db.Pool, row)
+	}
+	if err != nil {
 		log.Printf("create user: %v", err)
 		c.Error(response.NewError(http.StatusInternalServerError, "account created, but we couldn't sign you in. Please log in"))
 		return
 	}
 
+	SetAuthCookies(c, access, refresh)
 	response.Created(c, newUser)
 }
 
@@ -103,25 +107,17 @@ func RefreshToken(c *gin.Context) {
 		return
 	}
 
-	// validate the refresh token against the one in the database
-	row, err := ValidateRefreshTokenService(c, refreshToken)
+	access, refresh, err := RotateRefreshTokenService(c, refreshToken)
+	if errors.Is(err, ErrRefreshExpired) || errors.Is(err, ErrSuspiciousRefresh) {
+		c.Error(response.ErrUnauthorized)
+		return
+	}
 	if err != nil {
-		c.Error(response.ErrBadRequest)
-		return
-	}
-
-	// Mint new access and refresh tokens
-	jwtErr := AttachUserCookies(c, row.UserID, row.UserRole)
-	if jwtErr != nil {
+		log.Printf("refresh token: %v", err)
 		c.Error(response.ErrInternalServerError)
 		return
 	}
 
-	// rotate refresh tokens in the database
-	_, tokenErr := RotateRefreshTokenService(c, row, refreshToken)
-	if tokenErr != nil {
-		c.Error(response.ErrInternalServerError)
-		return
-	}
+	SetAuthCookies(c, access, refresh)
 	response.Ok(c, nil, nil)
 }

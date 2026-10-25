@@ -25,7 +25,7 @@ type UserInfo struct {
 
 type Claims struct {
 	jwt.RegisteredClaims
-	Sub *UserInfo `json:"sub"`
+	User *UserInfo `json:"user"`
 }
 
 type Argon2Configuration struct {
@@ -50,6 +50,11 @@ var privateKey = sync.OnceValues(func() (*ecdsa.PrivateKey, error) {
 	return jwt.ParseECPrivateKeyFromPEM([]byte(os.Getenv("JWT_PRIVATE_KEY")))
 })
 
+const (
+	AccessTTL  = 15 * time.Minute
+	RefreshTTL = 7 * 24 * time.Hour
+)
+
 // NewAccessToken signs an ES256 token carrying the user's ID and role. It expires after 15 minutes.
 func NewAccessToken(userID string, userRole string) (string, error) {
 	key, err := privateKey()
@@ -58,44 +63,32 @@ func NewAccessToken(userID string, userRole string) (string, error) {
 	}
 
 	t := jwt.New(jwt.SigningMethodES256)
-
 	t.Claims = &Claims{
-		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 15)),
-		Sub: &UserInfo{
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(AccessTTL)),
+		User: &UserInfo{
 			UserID:   userID,
 			UserRole: userRole,
 		},
 	}
-	return t.SignedString(key)
+	s, err := t.SignedString(key)
+	return s, err
 }
 
-// Refresh token signs an ES256 token. It expires after a week
-func NewRefreshToken() (string, error) {
-	key, err := privateKey()
-	if err != nil {
-		return "", err
-	}
-
-	t := jwt.New(jwt.SigningMethodES256)
-
-	t.Claims = &Claims{
-		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute * 60 * 24 * 7)),
-	}
-	return t.SignedString(key)
+// NewRefreshToken returns a random opaque token and when it expires (a week).
+// It isn't a JWT, so it can't be passed off as an access token.
+func NewRefreshToken() (string, time.Time) {
+	return rand.Text(), time.Now().Add(RefreshTTL)
 }
 
 // Mints a new refresh and access token, access tokens last 15 mins and refresh tokens last a week
-func MintTokens(userID string, userRole string) (string, string, error) {
-	refresh, refreshErr := NewRefreshToken()
-	if refreshErr != nil {
-		return "", "", refreshErr
-	}
+func MintTokens(userID string, userRole string) (string, string, time.Time, error) {
+	refresh, refreshExp := NewRefreshToken()
 
 	access, accessErr := NewAccessToken(userID, userRole)
 	if accessErr != nil {
-		return "", "", accessErr
+		return "", "", time.Time{}, accessErr
 	}
-	return access, refresh, nil
+	return access, refresh, refreshExp, nil
 }
 
 // ParseJWT verifies the signature and expiry and returns the claims

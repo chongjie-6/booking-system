@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Auth rejects requests without a valid "Authorization: Bearer <jwt>" header
+// Auth rejects requests without a valid cookie
 // and stores the token's auth.UserInfo under "user" for later handlers.
 func Auth() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -19,13 +19,13 @@ func Auth() gin.HandlerFunc {
 		}
 
 		claims, err := auth.ParseJWT(token)
-		if err != nil {
+		if err != nil || claims.User == nil {
 			c.Error(response.ErrUnauthorized)
 			c.Abort()
 			return
 		}
 
-		c.Set("user", claims.Sub)
+		c.Set("user", claims.User)
 		c.Next()
 	}
 }

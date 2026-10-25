@@ -71,22 +71,33 @@ func dbUpdateUser(ctx context.Context, userID string, req PatchUserRequest, hash
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[User])
 }
 
-// Returns pgx.ErrNoRows when the token hash isn't in the database.
-func dbGetRefreshToken(ctx context.Context, tokenHash string) (RefreshTokenRow, error) {
-	rows, _ := db.Pool.Query(ctx, `
+// Satisfied by both db.Pool and pgx.Tx.
+type querier interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}
+
+// Revokes the token if it's still valid and returns its row; pgx.ErrNoRows means it was unknown, expired or already used.
+// The UPDATE locks the row, so a concurrent request with the same token waits, then matches nothing.
+func dbRevokeRefreshToken(ctx context.Context, q querier, tokenHash string) (RefreshTokenRow, error) {
+	rows, _ := q.Query(ctx, `
+	WITH rt AS (
+		UPDATE refresh_tokens
+		SET is_revoked = true
+		WHERE token_hash = @token_hash AND is_revoked = false AND expires_at > now()
+		RETURNING token_hash, user_id, expires_at, is_revoked, ip_address, user_agent
+	)
 	SELECT
 	rt.token_hash, rt.user_id, u.user_role, rt.expires_at, rt.is_revoked, rt.ip_address, rt.user_agent
-	FROM refresh_tokens rt
+	FROM rt
 	JOIN users u ON u.user_id = rt.user_id
-	WHERE rt.token_hash = @token_hash
 	`, pgx.NamedArgs{
 		"token_hash": tokenHash,
 	})
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[RefreshTokenRow])
 }
 
-func dbCreateRefreshToken(ctx context.Context, refreshToken RefreshTokenRow) (RefreshTokenRow, error) {
-	rows, _ := db.Pool.Query(ctx, `
+func dbInsertRefreshToken(ctx context.Context, q querier, refreshToken RefreshTokenRow) (RefreshTokenRow, error) {
+	rows, _ := q.Query(ctx, `
 	WITH rt AS (
 		INSERT INTO
 		refresh_tokens(user_id, token_hash, expires_at, is_revoked, ip_address, user_agent)
@@ -106,18 +117,4 @@ func dbCreateRefreshToken(ctx context.Context, refreshToken RefreshTokenRow) (Re
 		"user_agent": refreshToken.UserAgent,
 	})
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[RefreshTokenRow])
-}
-
-// soft delete set bool flag = 1 so we can detect someone misusing old tokens and send notifications
-func dbSoftDeleteRefreshToken(ctx context.Context, oldRefreshHash string) (RefreshTokenRow, error) {
-	row, _ := db.Pool.Query(ctx, `
-	UPDATE 
-	refresh_tokens 
-	SET is_revoked = true
-	WHERE token_hash = @token_hash
-	RETURNING *
-	`, pgx.NamedArgs{
-		"token_hash": oldRefreshHash,
-	})
-	return pgx.CollectOneRow(row, pgx.RowToStructByName[RefreshTokenRow])
 }

@@ -2,12 +2,13 @@ package user
 
 import (
 	"booking-system/pkg/auth"
+	"booking-system/pkg/db"
 	"context"
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -20,21 +21,25 @@ var (
 	ErrSuspiciousRefresh = errors.New("refresh token used from a different client")
 )
 
-func AttachUserCookies(ctx *gin.Context, userID string, userRole string) error {
-	// issue new access + refresh
-	access, refresh, err := auth.MintTokens(userID, userRole)
-
+// Mints access + refresh tokens and builds the refresh row to store. Doesn't touch the response.
+func MintUserTokens(ctx *gin.Context, userID string, userRole string) (string, string, RefreshTokenRow, error) {
+	access, refresh, refreshExp, err := auth.MintTokens(userID, userRole)
 	if err != nil {
-		return ErrBadToken
+		return "", "", RefreshTokenRow{}, ErrBadToken
 	}
 
-	// set access and refresh cookies
-	a := &auth.AuthCookie{CookieName: "access_token", JWT: access, MaxAge: 15 * 60, Secure: true, HTTPOnly: true}
-	r := &auth.AuthCookie{CookieName: "refresh_token", JWT: refresh, MaxAge: 60 * 60 * 24 * 7, Secure: true, HTTPOnly: true}
+	userIP, userAgent := ctx.ClientIP(), ctx.Request.UserAgent()
+	row := RefreshTokenRow{TokenHash: auth.HashRefreshToken(refresh), UserID: userID, UserRole: userRole, ExpiresAt: refreshExp, IsRevoked: false, UserAgent: &userAgent, IPAddress: &userIP}
+	return access, refresh, row, nil
+}
+
+// Call only after the refresh row is saved, so the client never holds a token the database doesn't know.
+func SetAuthCookies(ctx *gin.Context, access string, refresh string) {
+	a := &auth.AuthCookie{CookieName: "access_token", JWT: access, MaxAge: int(auth.AccessTTL.Seconds()), Secure: true, HTTPOnly: true}
+	r := &auth.AuthCookie{CookieName: "refresh_token", JWT: refresh, MaxAge: int(auth.RefreshTTL.Seconds()), Secure: true, HTTPOnly: true}
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.SetCookie(a.CookieName, a.JWT, a.MaxAge, a.Path, a.Domain, a.Secure, a.HTTPOnly)
 	ctx.SetCookie(r.CookieName, r.JWT, r.MaxAge, r.Path, r.Domain, r.Secure, r.HTTPOnly)
-	return nil
 }
 
 // Hashes the password and stores a new user with the "user" role.
@@ -94,41 +99,34 @@ func UpdateUserService(ctx context.Context, userID string, req PatchUserRequest)
 	return u, err
 }
 
-// fetches the database and validates against token stored in the database
-func ValidateRefreshTokenService(ctx *gin.Context, refreshToken string) (RefreshTokenRow, error) {
-	// hash the refreshToken and then find corresponding row in the database
-	hashedRefresh := auth.HashRefreshToken(refreshToken)
-	refresh, err := dbGetRefreshToken(ctx, hashedRefresh)
-	if err != nil {
-		return RefreshTokenRow{}, err
-	}
+// Swaps a refresh token for a new access + refresh pair in one transaction, so each refresh token works once.
+// Any error rolls back, leaving the old token as it was.
+func RotateRefreshTokenService(ctx *gin.Context, refreshToken string) (string, string, error) {
+	var access, refresh string
+	err := pgx.BeginFunc(ctx, db.Pool, func(tx pgx.Tx) error {
+		old, err := dbRevokeRefreshToken(ctx, tx, auth.HashRefreshToken(refreshToken))
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrRefreshExpired
+		}
+		if err != nil {
+			return err
+		}
 
-	if refresh.IsRevoked || time.Now().After(refresh.ExpiresAt) {
-		return RefreshTokenRow{}, ErrRefreshExpired
-	}
+		//TODO implement notifications to user email about suspicious login
+		if old.IPAddress == nil || *old.IPAddress != ctx.ClientIP() ||
+			old.UserAgent == nil || *old.UserAgent != ctx.Request.UserAgent() {
+			return ErrSuspiciousRefresh
+		}
 
-	//TODO implement notifications to user email about suspicious login
-	if refresh.IPAddress == nil || *refresh.IPAddress != ctx.ClientIP() ||
-		refresh.UserAgent == nil || *refresh.UserAgent != ctx.Request.UserAgent() {
-		return RefreshTokenRow{}, ErrSuspiciousRefresh
-	}
-
-	return refresh, nil
-}
-
-// rotates refresh token hash, delete + insert
-func RotateRefreshTokenService(ctx context.Context, refreshToken RefreshTokenRow, oldRefreshToken string) (bool, error) {
-	// insert new refresh token
-	_, createErr := dbCreateRefreshToken(ctx, refreshToken)
-
-	if createErr != nil {
-		return false, createErr
-	}
-
-	oldRefreshHash := auth.HashRefreshToken(oldRefreshToken)
-	_, delErr := dbSoftDeleteRefreshToken(ctx, oldRefreshHash)
-	if delErr != nil {
-		return false, delErr
-	}
-	return true, nil
+		a, r, row, err := MintUserTokens(ctx, old.UserID, old.UserRole)
+		if err != nil {
+			return err
+		}
+		if _, err := dbInsertRefreshToken(ctx, tx, row); err != nil {
+			return err
+		}
+		access, refresh = a, r
+		return nil
+	})
+	return access, refresh, err
 }
