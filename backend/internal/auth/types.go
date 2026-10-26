@@ -12,14 +12,6 @@ type RefreshTokenRow struct {
 	UserAgent *string   `db:"user_agent"`
 }
 
-// CreateUserRequest is what a client may send to sign up.
-type CreateUserRequest struct {
-	FirstName string `json:"firstName" binding:"required"`
-	LastName  string `json:"lastName" binding:"required"`
-	Email     string `json:"email" binding:"required,email"`
-	Password  string `json:"password" binding:"required,min=8,max=72"`
-}
-
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"currentPassword" binding:"required"`
 	NewPassword     string `json:"newPassword" binding:"required,min=8,max=72"`
