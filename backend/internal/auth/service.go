@@ -75,7 +75,7 @@ func setAuthCookies(ctx *gin.Context, access string, refresh string) {
 	ctx.SetCookie(r.CookieName, r.JWT, r.MaxAge, r.Path, r.Domain, r.Secure, r.HTTPOnly)
 }
 
-// ClearAuthCookies expires the access_token and refresh_token cookies. Takes the request context; returns nothing.
+// clearAuthCookies expires the access_token and refresh_token cookies. Takes the request context; returns nothing.
 func clearAuthCookies(ctx *gin.Context) {
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.SetCookie("access_token", "", -1, "", "", true, true)
