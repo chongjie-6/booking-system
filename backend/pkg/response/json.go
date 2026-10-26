@@ -14,7 +14,8 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
-// Report validation errors by the JSON field name (firstName) instead of the Go one (FirstName).
+// init makes validation errors use the JSON field name (firstName) instead of the Go one (FirstName).
+// Runs once when the package loads; no input or output.
 func init() {
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
 		v.RegisterTagNameFunc(func(f reflect.StructField) string {
@@ -65,20 +66,25 @@ var ErrTooManyRequests = NewError(http.StatusTooManyRequests, "rate limit exceed
 var ErrInternalServerError = NewError(http.StatusInternalServerError, "internal server error, please try again later")
 
 // NewError builds an AppError for an HTTP status. Code comes from the status text, e.g. 409 -> "CONFLICT".
+// Takes the status and message; returns the *AppError.
 func NewError(status int, message string) *AppError {
 	code := strings.ToUpper(strings.ReplaceAll(http.StatusText(status), " ", "_"))
 	return &AppError{Status: status, Code: code, Message: message}
 }
 
+// Error makes AppError satisfy the error interface. Takes nothing; returns the message.
 func (e *AppError) Error() string {
 	return e.Message
 }
 
 // BadRequest turns a ShouldBindJSON error into a 400 that tells the user what to fix.
+// Takes the bind error; returns the *AppError.
 func BadRequest(err error) *AppError {
 	return NewError(http.StatusBadRequest, bindMessage(err))
 }
 
+// bindMessage turns a JSON bind error (empty body, bad JSON, wrong type, failed validation) into a readable message.
+// Takes the error; returns the message.
 func bindMessage(err error) string {
 	if errors.Is(err, io.EOF) {
 		return "request body is empty"
@@ -105,6 +111,8 @@ func bindMessage(err error) string {
 	return ErrBadRequest.Message
 }
 
+// fieldMessage describes one failed validation rule, e.g. "password must be at least 8 characters".
+// Takes the field error; returns the message.
 func fieldMessage(fe validator.FieldError) string {
 	f := fe.Field()
 	unit := ""
@@ -124,7 +132,7 @@ func fieldMessage(fe validator.FieldError) string {
 	return f + " is invalid"
 }
 
-// 200, successfull and returned data
+// Ok sends a 200 {success: true} response. Takes the request context, the data and optional pagination meta; returns nothing.
 func Ok(c *gin.Context, data any, meta *Meta) {
 	c.JSON(http.StatusOK, Response{
 		Success: true,
@@ -133,7 +141,7 @@ func Ok(c *gin.Context, data any, meta *Meta) {
 	})
 }
 
-// 201, successfully created a resource
+// Created sends a 201 {success: true} response for a new resource. Takes the request context and the data; returns nothing.
 func Created(c *gin.Context, data any) {
 	c.JSON(http.StatusCreated, Response{
 		Success: true,
@@ -141,8 +149,8 @@ func Created(c *gin.Context, data any) {
 	})
 }
 
-// ErrorHandler runs after the handlers and sends the last c.Error as the JSON error response.
-// Errors that aren't an *AppError become a 500, so internal details never reach the client.
+// ErrorHandler builds middleware that, after the handlers run, sends the last c.Error as the JSON error response.
+// Takes nothing; returns the gin.HandlerFunc. Non-*AppError errors become a 500, so internal details never reach the client.
 func ErrorHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()

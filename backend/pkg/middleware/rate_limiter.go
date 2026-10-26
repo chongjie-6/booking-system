@@ -88,7 +88,8 @@ type TokenBucket struct {
 	refillInterval float64 // in seconds
 }
 
-// NewTokenBucket creates a new TokenBucket rate limiter with the given configuration.
+// NewTokenBucket creates a TokenBucket limiter; zero fields default to 10 tokens refilled at 1 per second.
+// Takes a TokenBucketConfig; returns the *TokenBucket.
 func NewTokenBucket(cfg TokenBucketConfig) *TokenBucket {
 	if cfg.Capacity == 0 {
 		cfg.Capacity = 10
@@ -108,11 +109,8 @@ func NewTokenBucket(cfg TokenBucketConfig) *TokenBucket {
 	}
 }
 
-// Allow checks if a request should be allowed for the given key.
-//
-// It atomically checks and updates the token bucket state in Redis.
-// Returns whether the request is allowed, the number of remaining tokens,
-// and any error encountered.
+// Allow atomically takes one token from the key's bucket in Redis. Takes a context and the bucket key;
+// returns whether the request is allowed, the tokens left, and any Redis error.
 func (tb *TokenBucket) Allow(ctx context.Context, key string) (bool, float64, error) {
 	now := float64(time.Now().UnixMicro()) / 1e6
 
@@ -128,7 +126,8 @@ func (tb *TokenBucket) Allow(ctx context.Context, key string) (bool, float64, er
 	return allowed, remaining, nil
 }
 
-// NewBucket is the app-wide limiter: bursts of up to 20 requests, refilled at 10 per second.
+// NewBucket builds the app-wide limiter: bursts of up to 20 requests, refilled at 10 per second.
+// Takes nothing; returns the *TokenBucket.
 func NewBucket() *TokenBucket {
 	return NewTokenBucket(TokenBucketConfig{
 		Client:         rdb.Client,
@@ -138,8 +137,8 @@ func NewBucket() *TokenBucket {
 	})
 }
 
-// RateLimiterMiddleware gives each keyFn(c) value its own bucket and returns 429 once it's empty.
-// If Redis errors, the request is let through rather than blocked.
+// RateLimiterMiddleware gives each keyFn(c) value its own bucket and responds 429 once it's empty; if Redis errors, the request is let through.
+// Takes the limiter and a key function (e.g. client IP); returns a gin.HandlerFunc that also sets X-RateLimit-* headers.
 func RateLimiterMiddleware(limiter *TokenBucket, keyFn func(c *gin.Context) string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		allowed, remaining, err := limiter.Allow(c.Request.Context(), keyFn(c))

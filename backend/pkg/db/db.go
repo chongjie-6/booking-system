@@ -16,6 +16,8 @@ import (
 
 var Pool *pgxpool.Pool
 
+// Connect opens the Postgres pool from DATABASE_URL and pings it.
+// Takes a context; returns nothing, and exits the process if the database is unreachable.
 func Connect(ctx context.Context) {
 	var err error
 	Pool, err = pgxpool.New(ctx, os.Getenv("DATABASE_URL"))
@@ -28,6 +30,7 @@ func Connect(ctx context.Context) {
 }
 
 // Migrate applies any embedded migrations the database hasn't run yet.
+// Takes nothing; returns nothing, and exits the process if a migration fails.
 func Migrate() {
 	src, err := iofs.New(migrations.FS, ".")
 	if err != nil {

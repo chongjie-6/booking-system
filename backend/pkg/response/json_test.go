@@ -12,6 +12,8 @@ type signup struct {
 	Password  string `json:"password" binding:"required,min=8"`
 }
 
+// TestBindMessage checks that each bad request body maps to the expected message.
+// Takes the test runner; fails the test on any mismatch.
 func TestBindMessage(t *testing.T) {
 	cases := map[string]string{
 		``:                                 "request body is empty",
@@ -30,6 +32,8 @@ func TestBindMessage(t *testing.T) {
 	}
 }
 
+// TestNewErrorCode checks that NewError derives the right Code from each status.
+// Takes the test runner; fails the test on any mismatch.
 func TestNewErrorCode(t *testing.T) {
 	for err, want := range map[*AppError]string{
 		ErrBadRequest:          "BAD_REQUEST",

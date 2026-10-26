@@ -4,6 +4,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// SecurityHeaders sets browser security headers (CSP, HSTS, X-Frame-Options, etc.) on every response.
+// Takes nothing; returns the gin.HandlerFunc.
 func SecurityHeaders() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Header("X-Frame-Options", "DENY")

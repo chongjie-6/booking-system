@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Routes mounts the /payments endpoints (just a ping for now). Takes the Gin engine; returns nothing.
 func Routes(r *gin.Engine) {
 	paymentRoutes := r.Group("/payments")
 	{

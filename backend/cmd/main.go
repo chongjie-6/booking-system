@@ -14,6 +14,8 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// main loads .env, connects Postgres and Redis, runs migrations, then starts the Gin server with all middleware and routes.
+// Takes no input and returns nothing; it blocks while the server runs.
 func main() {
 	// Load .env variables into process
 	godotenv.Load()

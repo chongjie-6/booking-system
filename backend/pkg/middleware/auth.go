@@ -7,8 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Auth rejects requests without a valid cookie
-// and stores the token's auth.UserInfo under "user" for later handlers.
+// Auth builds middleware that rejects requests with a 401 unless the access_token cookie is valid.
+// Takes nothing; returns a gin.HandlerFunc that stores the token's *auth.UserInfo under "user" for later handlers.
 func Auth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token, err := c.Cookie("access_token")

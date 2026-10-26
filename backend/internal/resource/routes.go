@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Routes mounts the /resources endpoints (just a ping for now). Takes the Gin engine; returns nothing.
 func Routes(r *gin.Engine) {
 	resourceRoutes := r.Group("/resources")
 	{
