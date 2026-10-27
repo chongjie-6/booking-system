@@ -34,10 +34,10 @@ func dbRevokeRefreshToken(ctx context.Context, q querier, tokenHash string) (Ref
 		UPDATE refresh_tokens
 		SET is_revoked = true
 		WHERE token_hash = @token_hash AND is_revoked = false AND expires_at > now()
-		RETURNING token_hash, user_id, expires_at, is_revoked, ip_address, user_agent
+		RETURNING token_hash, user_id, expires_at, is_revoked, ip_address, user_agent, device_hash
 	)
 	SELECT
-	rt.token_hash, rt.user_id, u.user_role, rt.expires_at, rt.is_revoked, rt.ip_address, rt.user_agent
+	rt.token_hash, rt.user_id, u.user_role, rt.expires_at, rt.is_revoked, rt.ip_address, rt.user_agent, rt.device_hash
 	FROM rt
 	JOIN users u ON u.user_id = rt.user_id
 	`, pgx.NamedArgs{
@@ -52,21 +52,22 @@ func dbInsertRefreshToken(ctx context.Context, q querier, refreshToken RefreshTo
 	rows, _ := q.Query(ctx, `
 	WITH rt AS (
 		INSERT INTO
-		refresh_tokens(user_id, token_hash, expires_at, is_revoked, ip_address, user_agent)
-		VALUES (@user_id, @token_hash, @expires_at, @is_revoked, @ip_address, @user_agent)
-		RETURNING token_hash, user_id, expires_at, is_revoked, ip_address, user_agent
+		refresh_tokens(user_id, token_hash, expires_at, is_revoked, ip_address, user_agent, device_hash)
+		VALUES (@user_id, @token_hash, @expires_at, @is_revoked, @ip_address, @user_agent, @device_hash)
+		RETURNING token_hash, user_id, expires_at, is_revoked, ip_address, user_agent, device_hash
 	)
 	SELECT
-	rt.token_hash, rt.user_id, u.user_role, rt.expires_at, rt.is_revoked, rt.ip_address, rt.user_agent
+	rt.token_hash, rt.user_id, u.user_role, rt.expires_at, rt.is_revoked, rt.ip_address, rt.user_agent, rt.device_hash
 	FROM rt
 	JOIN users u ON u.user_id = rt.user_id
 	`, pgx.NamedArgs{
-		"user_id":    refreshToken.UserID,
-		"token_hash": refreshToken.TokenHash,
-		"expires_at": refreshToken.ExpiresAt,
-		"is_revoked": refreshToken.IsRevoked,
-		"ip_address": refreshToken.IPAddress,
-		"user_agent": refreshToken.UserAgent,
+		"user_id":     refreshToken.UserID,
+		"token_hash":  refreshToken.TokenHash,
+		"expires_at":  refreshToken.ExpiresAt,
+		"is_revoked":  refreshToken.IsRevoked,
+		"ip_address":  refreshToken.IPAddress,
+		"user_agent":  refreshToken.UserAgent,
+		"device_hash": refreshToken.DeviceHash,
 	})
 	return pgx.CollectOneRow(rows, pgx.RowToStructByName[RefreshTokenRow])
 }
@@ -83,4 +84,33 @@ func dbGetUserPasswordHashFromEmail(ctx context.Context, email string) (user.Use
 		"email": email,
 	})
 	return pgx.CollectOneRow(rows, pgx.RowToStructByNameLax[user.User])
+}
+
+// dbGetSeenIPs lists every distinct IP the user has been issued a refresh token from.
+// Takes a context and user ID; returns the IPs, or the database error.
+func dbGetSeenIPs(ctx context.Context, userID string) ([]string, error) {
+	rows, _ := db.Pool.Query(ctx, `
+	SELECT DISTINCT ip_address
+	FROM refresh_tokens
+	WHERE user_id = @user_id AND ip_address IS NOT NULL
+	`, pgx.NamedArgs{
+		"user_id": userID,
+	})
+	return pgx.CollectRows(rows, pgx.RowTo[string])
+}
+
+// dbHasDevice reports whether the device has been issued a refresh token.
+// Takes a context, user ID and device hash (HashRefreshToken of the device_id cookie); returns whether it was seen, or the database error.
+func dbHasDevice(ctx context.Context, userID string, deviceHash string) (bool, error) {
+	var seen bool
+	err := db.Pool.QueryRow(ctx, `
+	SELECT EXISTS (
+		SELECT 1 FROM refresh_tokens
+		WHERE user_id = @user_id AND device_hash = @device_hash
+	)
+	`, pgx.NamedArgs{
+		"user_id":     userID,
+		"device_hash": deviceHash,
+	}).Scan(&seen)
+	return seen, err
 }

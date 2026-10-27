@@ -35,19 +35,18 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	access, refresh, err := issueUserTokens(c, db.Pool, newUser.UserID, newUser.UserRole)
+	tokens, err := issueUserTokens(c, db.Pool, newUser.UserID, newUser.UserRole)
 	if err != nil {
 		log.Printf("create user: %v", err)
 		c.Error(response.NewError(http.StatusInternalServerError, "account created, but we couldn't sign you in. Please log in"))
 		return
 	}
-
-	setAuthCookies(c, access, refresh)
+	setAuthCookies(c, tokens)
 	response.Created(c, newUser)
 }
 
 // RefreshToken swaps the refresh_token cookie for a new access + refresh pair.
-// Takes the request context; responds 200 with fresh auth cookies, or 401 if the token is invalid or used from another client.
+// Takes the request context; responds 200 with fresh auth cookies, or 401 if the token is unknown, expired or already used.
 func RefreshToken(c *gin.Context) {
 	refreshToken, err := c.Cookie("refresh_token")
 	if err != nil {
@@ -55,8 +54,8 @@ func RefreshToken(c *gin.Context) {
 		return
 	}
 
-	access, refresh, err := RotateRefreshTokenService(c, refreshToken)
-	if errors.Is(err, ErrRefreshExpired) || errors.Is(err, ErrSuspiciousRefresh) {
+	tokens, err := RotateRefreshTokenService(c, refreshToken)
+	if errors.Is(err, ErrRefreshExpired) {
 		c.Error(response.ErrUnauthorized)
 		return
 	}
@@ -66,7 +65,7 @@ func RefreshToken(c *gin.Context) {
 		return
 	}
 
-	setAuthCookies(c, access, refresh)
+	setAuthCookies(c, tokens)
 	response.Ok(c, nil, nil)
 }
 
@@ -96,7 +95,7 @@ func ChangePassword(c *gin.Context) {
 		return
 	}
 
-	access, refresh, err := ChangePasswordService(c, u, req)
+	tokens, err := ChangePasswordService(c, u, req)
 	if errors.Is(err, ErrWrongPassword) {
 		c.Error(response.NewError(http.StatusForbidden, "password is incorrect"))
 		return
@@ -107,7 +106,7 @@ func ChangePassword(c *gin.Context) {
 		return
 	}
 
-	setAuthCookies(c, access, refresh)
+	setAuthCookies(c, tokens)
 	response.Ok(c, nil, nil)
 }
 
@@ -120,7 +119,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	access, refresh, err := LoginUserService(c, req)
+	tokens, err := LoginUserService(c, req)
 	if errors.Is(err, ErrInvalidCredentials) {
 		c.Error(response.ErrUnauthorized)
 		return
@@ -131,6 +130,6 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	setAuthCookies(c, access, refresh)
+	setAuthCookies(c, tokens)
 	response.Ok(c, nil, nil)
 }

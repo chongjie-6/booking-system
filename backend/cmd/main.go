@@ -3,6 +3,7 @@ package main
 import (
 	"booking-system/internal/router"
 	"booking-system/pkg/db"
+	"booking-system/pkg/geoip"
 	"booking-system/pkg/middleware"
 	"booking-system/pkg/rdb"
 	"booking-system/pkg/response"
@@ -26,6 +27,7 @@ func main() {
 	db.Connect(ctx)
 	db.Migrate()
 	rdb.Connect(ctx)
+	geoip.Open()
 
 	// Create a new Gin router with default middleware
 	r := gin.Default()

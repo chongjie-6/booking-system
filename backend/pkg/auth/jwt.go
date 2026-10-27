@@ -35,16 +35,6 @@ type Argon2Configuration struct {
 	KeyLength  uint32
 }
 
-type AuthCookie struct {
-	CookieName string
-	JWT        string
-	MaxAge     int
-	Path       string
-	Domain     string
-	Secure     bool
-	HTTPOnly   bool
-}
-
 // Parsed on first use, after main has loaded .env
 var privateKey = sync.OnceValues(func() (*ecdsa.PrivateKey, error) {
 	return jwt.ParseECPrivateKeyFromPEM([]byte(os.Getenv("JWT_PRIVATE_KEY")))
@@ -55,6 +45,7 @@ var ErrPasswordMismatch = errors.New("password does not match")
 const (
 	AccessTTL  = 15 * time.Minute
 	RefreshTTL = 7 * 24 * time.Hour
+	DeviceTTL  = 365 * 24 * time.Hour
 )
 
 // NewAccessToken signs an ES256 JWT carrying the user's ID and role that expires after 15 minutes.

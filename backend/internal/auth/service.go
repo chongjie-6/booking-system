@@ -1,11 +1,18 @@
 package auth
 
 import (
+	"booking-system/internal/notification"
 	"booking-system/internal/user"
 	"booking-system/pkg/auth"
 	"booking-system/pkg/db"
+	"booking-system/pkg/geoip"
+	"context"
+	"crypto/rand"
 	"errors"
+	"log"
 	"net/http"
+	"net/netip"
+	"sync"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -13,79 +20,90 @@ import (
 
 var (
 	ErrRefreshExpired     = errors.New("refresh token has expired or is revoked")
-	ErrSuspiciousRefresh  = errors.New("refresh token used from a different client")
 	ErrBadToken           = errors.New("jwt could not be issued")
 	ErrInvalidCredentials = errors.New("invalid email or password")
 	ErrWrongPassword      = errors.New("current password is incorrect")
 )
 
+// dummyHash is what login checks the password against when the email has no stored hash, so it does the same argon2
+// work as a wrong password. Built from HashPassword on first use, so it always matches the real cost settings.
+var dummyHash = sync.OnceValue(func() string { return auth.HashPassword(rand.Text()) })
+
 // ChangePasswordService checks the current password, saves the new one, revokes all the user's refresh tokens
-// and issues a fresh pair for this client, in one transaction. Returns (access, refresh, err), or ErrWrongPassword.
-func ChangePasswordService(ctx *gin.Context, u *auth.UserInfo, req ChangePasswordRequest) (string, string, error) {
+// and issues fresh tokens for this client, in one transaction. Takes the request context, signed-in user and request;
+// returns (tokens, nil) for setAuthCookies, ErrWrongPassword, or the error that rolled the transaction back.
+func ChangePasswordService(ctx *gin.Context, u *auth.UserInfo, req ChangePasswordRequest) (authTokens, error) {
 	current, err := user.GetUserService(ctx, u.UserID)
 	if err != nil {
-		return "", "", err
+		return authTokens{}, err
 	}
 	if current.HashedPassword == nil {
-		return "", "", ErrWrongPassword
+		return authTokens{}, ErrWrongPassword
 	}
 	err = auth.VerifyPassword(req.CurrentPassword, *current.HashedPassword)
 	if errors.Is(err, auth.ErrPasswordMismatch) {
-		return "", "", ErrWrongPassword
+		return authTokens{}, ErrWrongPassword
 	}
 	if err != nil {
-		return "", "", err
+		return authTokens{}, err
 	}
 
-	var access, refresh string
+	var tokens authTokens
 	err = pgx.BeginFunc(ctx, db.Pool, func(tx pgx.Tx) error {
 		if err := dbSetPasswordAndRevokeTokens(ctx, tx, u.UserID, auth.HashPassword(req.NewPassword)); err != nil {
 			return err
 		}
-		access, refresh, err = issueUserTokens(ctx, tx, u.UserID, current.UserRole)
+		tokens, err = issueUserTokens(ctx, tx, u.UserID, current.UserRole)
 		return err
 	})
-	return access, refresh, err
+	return tokens, err
 }
 
-// issueUserTokens mints an access + refresh token and saves the refresh row, tagged with the client's IP and user agent, through q (Pool or Tx).
-// Takes the request context, querier, user ID and role; returns (access, refresh, err), with ErrBadToken if signing fails.
-// Tokens come back only once the row is saved.
-func issueUserTokens(ctx *gin.Context, q querier, userID string, userRole string) (string, string, error) {
+// issueUserTokens mints an access + refresh token and saves the refresh row through q (Pool or Tx) tagged with the client's
+// IP, user agent and device. The device comes from the device_id cookie, or a new random ID if there is none.
+// Takes the request context, querier, user ID and role; returns (tokens, err), with ErrBadToken if signing fails.
+// It doesn't set cookies: the handler passes the tokens to setAuthCookies once the row is committed.
+func issueUserTokens(ctx *gin.Context, q querier, userID string, userRole string) (authTokens, error) {
+	deviceID, _ := ctx.Cookie("device_id") // "" when missing, same check LoginUserService uses
+	if deviceID == "" {
+		deviceID = rand.Text()
+	}
+
 	access, refresh, refreshExp, err := auth.MintTokens(userID, userRole)
 	if err != nil {
-		return "", "", ErrBadToken
+		return authTokens{}, ErrBadToken
 	}
 
+	deviceHash, refreshHash := auth.HashRefreshToken(deviceID), auth.HashRefreshToken(refresh)
 	userIP, userAgent := ctx.ClientIP(), ctx.Request.UserAgent()
-	row := RefreshTokenRow{TokenHash: auth.HashRefreshToken(refresh), UserID: userID, UserRole: userRole, ExpiresAt: refreshExp, IsRevoked: false, UserAgent: &userAgent, IPAddress: &userIP}
+	row := RefreshTokenRow{TokenHash: refreshHash, UserID: userID, UserRole: userRole, ExpiresAt: refreshExp, IsRevoked: false, UserAgent: &userAgent, IPAddress: &userIP, DeviceHash: &deviceHash}
 	if _, err := dbInsertRefreshToken(ctx, q, row); err != nil {
-		return "", "", err
+		return authTokens{}, err
 	}
-	return access, refresh, nil
+	return authTokens{access: access, refresh: refresh, deviceID: deviceID}, nil
 }
 
-// setAuthCookies sets the access_token and refresh_token cookies. Takes the request context and both tokens; returns nothing.
-// Call only after the refresh row is saved, so the client never holds a token the database doesn't know.
-func setAuthCookies(ctx *gin.Context, access string, refresh string) {
-	a := &auth.AuthCookie{CookieName: "access_token", JWT: access, MaxAge: int(auth.AccessTTL.Seconds()), Secure: true, HTTPOnly: true}
-	r := &auth.AuthCookie{CookieName: "refresh_token", JWT: refresh, MaxAge: int(auth.RefreshTTL.Seconds()), Secure: true, HTTPOnly: true}
+// setAuthCookies sets the access_token, refresh_token and device_id cookies. Takes the request context and tokens; returns nothing.
+// Call only after the refresh row is committed, so the client never holds a token the database doesn't know.
+func setAuthCookies(ctx *gin.Context, t authTokens) {
 	ctx.SetSameSite(http.SameSiteLaxMode)
-	ctx.SetCookie(a.CookieName, a.JWT, a.MaxAge, a.Path, a.Domain, a.Secure, a.HTTPOnly)
-	ctx.SetCookie(r.CookieName, r.JWT, r.MaxAge, r.Path, r.Domain, r.Secure, r.HTTPOnly)
+	ctx.SetCookie("access_token", t.access, int(auth.AccessTTL.Seconds()), "", "", true, true)
+	ctx.SetCookie("refresh_token", t.refresh, int(auth.RefreshTTL.Seconds()), "/auth", "", true, true)
+	ctx.SetCookie("device_id", t.deviceID, int(auth.DeviceTTL.Seconds()), "/auth", "", true, true)
 }
 
 // clearAuthCookies expires the access_token and refresh_token cookies. Takes the request context; returns nothing.
 func clearAuthCookies(ctx *gin.Context) {
 	ctx.SetSameSite(http.SameSiteLaxMode)
 	ctx.SetCookie("access_token", "", -1, "", "", true, true)
-	ctx.SetCookie("refresh_token", "", -1, "", "", true, true)
+	ctx.SetCookie("refresh_token", "", -1, "/auth", "", true, true)
 }
 
 // RotateRefreshTokenService revokes a refresh token and issues a new access + refresh pair in one transaction, so each token works once.
-// Takes the request context and raw refresh token; returns (access, refresh, err). Any error rolls back, leaving the old token as it was.
-func RotateRefreshTokenService(ctx *gin.Context, refreshToken string) (string, string, error) {
-	var access, refresh string
+// Takes the request context and raw refresh token; returns (tokens, nil) for setAuthCookies, ErrRefreshExpired if the token is
+// unknown, expired or already used, or the database error. Any error rolls back, leaving the old token as it was.
+func RotateRefreshTokenService(ctx *gin.Context, refreshToken string) (authTokens, error) {
+	var tokens authTokens
 	err := pgx.BeginFunc(ctx, db.Pool, func(tx pgx.Tx) error {
 		old, err := dbRevokeRefreshToken(ctx, tx, auth.HashRefreshToken(refreshToken))
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -95,16 +113,10 @@ func RotateRefreshTokenService(ctx *gin.Context, refreshToken string) (string, s
 			return err
 		}
 
-		//TODO implement notifications to user email about suspicious login
-		if old.IPAddress == nil || *old.IPAddress != ctx.ClientIP() ||
-			old.UserAgent == nil || *old.UserAgent != ctx.Request.UserAgent() {
-			return ErrSuspiciousRefresh
-		}
-
-		access, refresh, err = issueUserTokens(ctx, tx, old.UserID, old.UserRole)
+		tokens, err = issueUserTokens(ctx, tx, old.UserID, old.UserRole)
 		return err
 	})
-	return access, refresh, err
+	return tokens, err
 }
 
 // RevokeRefreshTokenService revokes a refresh token. Takes the request context and raw token;
@@ -117,27 +129,108 @@ func RevokeRefreshTokenService(ctx *gin.Context, refreshToken string) error {
 	return err
 }
 
-// LoginUserService checks the email and password, then issues a saved access + refresh pair.
-// Takes the request context and LoginRequest; returns (access, refresh, err), with ErrInvalidCredentials
-// for an unknown email, an account with no password, or a wrong password.
-func LoginUserService(ctx *gin.Context, loginRequest LoginRequest) (string, string, error) {
+// LoginUserService checks the email and password, then issues tokens. If the device is new to the user, or the IP is
+// on a network and in a country they haven't used (see isKnownIP), it also sends a suspicious-activity notification in the background.
+// Takes the request context and LoginRequest; returns (tokens, nil) for setAuthCookies, ErrInvalidCredentials for an unknown
+// email, an account with no password, or a wrong password, or the database error.
+func LoginUserService(ctx *gin.Context, loginRequest LoginRequest) (authTokens, error) {
 	u, err := dbGetUserPasswordHashFromEmail(ctx, loginRequest.Email)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", "", ErrInvalidCredentials
-	}
-	if err != nil {
-		return "", "", err
-	}
-	if u.HashedPassword == nil {
-		return "", "", ErrInvalidCredentials
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return authTokens{}, err
 	}
 
-	err = auth.VerifyPassword(loginRequest.Password, *u.HashedPassword)
-	if errors.Is(err, auth.ErrPasswordMismatch) {
-		return "", "", ErrInvalidCredentials
+	// Unknown emails and accounts with no password still run argon2 (against dummyHash),
+	// so response time doesn't reveal which emails are registered.
+	hash := dummyHash()
+	if u.HashedPassword != nil {
+		hash = *u.HashedPassword
+	}
+	err = auth.VerifyPassword(loginRequest.Password, hash)
+	if u.HashedPassword == nil || errors.Is(err, auth.ErrPasswordMismatch) {
+		return authTokens{}, ErrInvalidCredentials
 	}
 	if err != nil {
-		return "", "", err
+		return authTokens{}, err
 	}
-	return issueUserTokens(ctx, db.Pool, u.UserID, u.UserRole)
+
+	// Alert the user when they log in from a device or network they haven't used before.
+	// A new device alerts anyway, so the IP history is only checked for a known one.
+	ip, ua := ctx.ClientIP(), ctx.Request.UserAgent()
+	known := false
+	if deviceID, _ := ctx.Cookie("device_id"); deviceID != "" {
+		if known, err = dbHasDevice(ctx, u.UserID, auth.HashRefreshToken(deviceID)); err != nil {
+			return authTokens{}, err
+		}
+	}
+	if known {
+		if known, err = isKnownIP(ctx, u.UserID, ip); err != nil {
+			return authTokens{}, err
+		}
+	}
+
+	tokens, err := issueUserTokens(ctx, db.Pool, u.UserID, u.UserRole)
+	if err != nil {
+		return authTokens{}, err
+	}
+	if !known {
+		go func() {
+			// gin's Recovery middleware doesn't cover other goroutines, so without this a panic here would crash the server.
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("suspicious activity notification: %v", r)
+				}
+			}()
+			notification.SendSuspiciousActivityNotification(u.UserID, ip, ua)
+		}()
+	}
+	return tokens, nil
+}
+
+// isKnownIP reports whether the user has been issued a token before on a nearby network or from the same country. Takes a context, user ID and IP; returns (known, err).
+func isKnownIP(ctx context.Context, userID string, ip string) (bool, error) {
+	seen, err := dbGetSeenIPs(ctx, userID)
+	if err != nil {
+		return false, err
+	}
+	return onSeenNetwork(ip, seen) || inSeenCountry(ip, seen, geoip.Country), nil
+}
+
+// inSeenCountry reports whether ip is in the same country as any seen IP. Takes the IP, the seen IPs, and a lookup
+// that returns an ISO country code; an unknown country ("") never matches, so private IPs fall back to onSeenNetwork.
+func inSeenCountry(ip string, seen []string, country func(netip.Addr) string) bool {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return false
+	}
+	want := country(addr.Unmap())
+	if want == "" {
+		return false
+	}
+	for _, s := range seen {
+		if a, err := netip.ParseAddr(s); err == nil && country(a.Unmap()) == want {
+			return true
+		}
+	}
+	return false
+}
+
+// onSeenNetwork reports whether ip shares a /24 (IPv4) or /48 (IPv6) with any seen IP,
+// so a new address on the same home or office network still counts as known. An unparseable ip matches nothing.
+func onSeenNetwork(ip string, seen []string) bool {
+	addr, err := netip.ParseAddr(ip)
+	if err != nil {
+		return false
+	}
+	addr = addr.Unmap()
+	bits := 48
+	if addr.Is4() {
+		bits = 24
+	}
+	network, _ := addr.Prefix(bits)
+	for _, s := range seen {
+		if a, err := netip.ParseAddr(s); err == nil && network.Contains(a.Unmap()) {
+			return true
+		}
+	}
+	return false
 }
