@@ -10,11 +10,9 @@ import (
 	"crypto/rand"
 	"errors"
 	"log"
-	"net/http"
 	"net/netip"
 	"sync"
 
-	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -30,9 +28,9 @@ var (
 var dummyHash = sync.OnceValue(func() string { return auth.HashPassword(rand.Text()) })
 
 // ChangePasswordService checks the current password, saves the new one, revokes all the user's refresh tokens
-// and issues fresh tokens for this client, in one transaction. Takes the request context, signed-in user and request;
+// and issues fresh tokens for this client, in one transaction. Takes the request context, signed-in user, request and client;
 // returns (tokens, nil) for setAuthCookies, ErrWrongPassword, or the error that rolled the transaction back.
-func ChangePasswordService(ctx *gin.Context, u *auth.UserInfo, req ChangePasswordRequest) (authTokens, error) {
+func ChangePasswordService(ctx context.Context, u *auth.UserInfo, req ChangePasswordRequest, client clientInfo) (authTokens, error) {
 	current, err := user.GetUserService(ctx, u.UserID)
 	if err != nil {
 		return authTokens{}, err
@@ -53,18 +51,18 @@ func ChangePasswordService(ctx *gin.Context, u *auth.UserInfo, req ChangePasswor
 		if err := dbSetPasswordAndRevokeTokens(ctx, tx, u.UserID, auth.HashPassword(req.NewPassword)); err != nil {
 			return err
 		}
-		tokens, err = issueUserTokens(ctx, tx, u.UserID, current.UserRole)
+		tokens, err = issueUserTokens(ctx, tx, u.UserID, current.UserRole, client)
 		return err
 	})
 	return tokens, err
 }
 
 // issueUserTokens mints an access + refresh token and saves the refresh row through q (Pool or Tx) tagged with the client's
-// IP, user agent and device. The device comes from the device_id cookie, or a new random ID if there is none.
-// Takes the request context, querier, user ID and role; returns (tokens, err), with ErrBadToken if signing fails.
+// IP, user agent and device. The device is client.deviceID, or a new random ID if that is empty.
+// Takes the request context, querier, user ID, role and client; returns (tokens, err), with ErrBadToken if signing fails.
 // It doesn't set cookies: the handler passes the tokens to setAuthCookies once the row is committed.
-func issueUserTokens(ctx *gin.Context, q querier, userID string, userRole string) (authTokens, error) {
-	deviceID, _ := ctx.Cookie("device_id") // "" when missing, same check LoginUserService uses
+func issueUserTokens(ctx context.Context, q querier, userID string, userRole string, client clientInfo) (authTokens, error) {
+	deviceID := client.deviceID
 	if deviceID == "" {
 		deviceID = rand.Text()
 	}
@@ -75,34 +73,17 @@ func issueUserTokens(ctx *gin.Context, q querier, userID string, userRole string
 	}
 
 	deviceHash, refreshHash := auth.HashRefreshToken(deviceID), auth.HashRefreshToken(refresh)
-	userIP, userAgent := ctx.ClientIP(), ctx.Request.UserAgent()
-	row := RefreshTokenRow{TokenHash: refreshHash, UserID: userID, UserRole: userRole, ExpiresAt: refreshExp, IsRevoked: false, UserAgent: &userAgent, IPAddress: &userIP, DeviceHash: &deviceHash}
+	row := RefreshTokenRow{TokenHash: refreshHash, UserID: userID, UserRole: userRole, ExpiresAt: refreshExp, IsRevoked: false, UserAgent: &client.userAgent, IPAddress: &client.ip, DeviceHash: &deviceHash}
 	if _, err := dbInsertRefreshToken(ctx, q, row); err != nil {
 		return authTokens{}, err
 	}
 	return authTokens{access: access, refresh: refresh, deviceID: deviceID}, nil
 }
 
-// setAuthCookies sets the access_token, refresh_token and device_id cookies. Takes the request context and tokens; returns nothing.
-// Call only after the refresh row is committed, so the client never holds a token the database doesn't know.
-func setAuthCookies(ctx *gin.Context, t authTokens) {
-	ctx.SetSameSite(http.SameSiteLaxMode)
-	ctx.SetCookie("access_token", t.access, int(auth.AccessTTL.Seconds()), "", "", true, true)
-	ctx.SetCookie("refresh_token", t.refresh, int(auth.RefreshTTL.Seconds()), "/auth", "", true, true)
-	ctx.SetCookie("device_id", t.deviceID, int(auth.DeviceTTL.Seconds()), "/auth", "", true, true)
-}
-
-// clearAuthCookies expires the access_token and refresh_token cookies. Takes the request context; returns nothing.
-func clearAuthCookies(ctx *gin.Context) {
-	ctx.SetSameSite(http.SameSiteLaxMode)
-	ctx.SetCookie("access_token", "", -1, "", "", true, true)
-	ctx.SetCookie("refresh_token", "", -1, "/auth", "", true, true)
-}
-
 // RotateRefreshTokenService revokes a refresh token and issues a new access + refresh pair in one transaction, so each token works once.
-// Takes the request context and raw refresh token; returns (tokens, nil) for setAuthCookies, ErrRefreshExpired if the token is
+// Takes the request context, raw refresh token and client; returns (tokens, nil) for setAuthCookies, ErrRefreshExpired if the token is
 // unknown, expired or already used, or the database error. Any error rolls back, leaving the old token as it was.
-func RotateRefreshTokenService(ctx *gin.Context, refreshToken string) (authTokens, error) {
+func RotateRefreshTokenService(ctx context.Context, refreshToken string, client clientInfo) (authTokens, error) {
 	var tokens authTokens
 	err := pgx.BeginFunc(ctx, db.Pool, func(tx pgx.Tx) error {
 		old, err := dbRevokeRefreshToken(ctx, tx, auth.HashRefreshToken(refreshToken))
@@ -113,7 +94,7 @@ func RotateRefreshTokenService(ctx *gin.Context, refreshToken string) (authToken
 			return err
 		}
 
-		tokens, err = issueUserTokens(ctx, tx, old.UserID, old.UserRole)
+		tokens, err = issueUserTokens(ctx, tx, old.UserID, old.UserRole, client)
 		return err
 	})
 	return tokens, err
@@ -121,7 +102,7 @@ func RotateRefreshTokenService(ctx *gin.Context, refreshToken string) (authToken
 
 // RevokeRefreshTokenService revokes a refresh token. Takes the request context and raw token;
 // returns nil if it was revoked or was already invalid, so logout can be repeated safely.
-func RevokeRefreshTokenService(ctx *gin.Context, refreshToken string) error {
+func RevokeRefreshTokenService(ctx context.Context, refreshToken string) error {
 	_, err := dbRevokeRefreshToken(ctx, db.Pool, auth.HashRefreshToken(refreshToken))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil
@@ -131,9 +112,9 @@ func RevokeRefreshTokenService(ctx *gin.Context, refreshToken string) error {
 
 // LoginUserService checks the email and password, then issues tokens. If the device is new to the user, or the IP is
 // on a network and in a country they haven't used (see isKnownIP), it also sends a suspicious-activity notification in the background.
-// Takes the request context and LoginRequest; returns (tokens, nil) for setAuthCookies, ErrInvalidCredentials for an unknown
+// Takes the request context, LoginRequest and client; returns (tokens, nil) for setAuthCookies, ErrInvalidCredentials for an unknown
 // email, an account with no password, or a wrong password, or the database error.
-func LoginUserService(ctx *gin.Context, loginRequest LoginRequest) (authTokens, error) {
+func LoginUserService(ctx context.Context, loginRequest LoginRequest, client clientInfo) (authTokens, error) {
 	u, err := dbGetUserPasswordHashFromEmail(ctx, loginRequest.Email)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return authTokens{}, err
@@ -155,20 +136,19 @@ func LoginUserService(ctx *gin.Context, loginRequest LoginRequest) (authTokens, 
 
 	// Alert the user when they log in from a device or network they haven't used before.
 	// A new device alerts anyway, so the IP history is only checked for a known one.
-	ip, ua := ctx.ClientIP(), ctx.Request.UserAgent()
 	known := false
-	if deviceID, _ := ctx.Cookie("device_id"); deviceID != "" {
-		if known, err = dbHasDevice(ctx, u.UserID, auth.HashRefreshToken(deviceID)); err != nil {
+	if client.deviceID != "" {
+		if known, err = dbHasDevice(ctx, u.UserID, auth.HashRefreshToken(client.deviceID)); err != nil {
 			return authTokens{}, err
 		}
 	}
 	if known {
-		if known, err = isKnownIP(ctx, u.UserID, ip); err != nil {
+		if known, err = isKnownIP(ctx, u.UserID, client.ip); err != nil {
 			return authTokens{}, err
 		}
 	}
 
-	tokens, err := issueUserTokens(ctx, db.Pool, u.UserID, u.UserRole)
+	tokens, err := issueUserTokens(ctx, db.Pool, u.UserID, u.UserRole, client)
 	if err != nil {
 		return authTokens{}, err
 	}
@@ -180,7 +160,7 @@ func LoginUserService(ctx *gin.Context, loginRequest LoginRequest) (authTokens, 
 					log.Printf("suspicious activity notification: %v", r)
 				}
 			}()
-			notification.SendSuspiciousActivityNotification(u.UserID, ip, ua)
+			notification.SendSuspiciousActivityNotification(u.UserID, client.ip, client.userAgent)
 		}()
 	}
 	return tokens, nil

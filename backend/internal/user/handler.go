@@ -20,7 +20,7 @@ func Ping(c *gin.Context) {
 func GetUser(c *gin.Context) {
 	user, _ := c.MustGet("user").(*auth.UserInfo)
 
-	u, err := GetUserService(c, user.UserID)
+	u, err := GetUserService(c.Request.Context(), user.UserID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		c.Error(response.ErrNotFound)
 		return
@@ -45,7 +45,7 @@ func PatchUser(c *gin.Context) {
 		return
 	}
 
-	u, err := UpdateUserService(c, user.UserID, req)
+	u, err := UpdateUserService(c.Request.Context(), user.UserID, req)
 	if errors.Is(err, ErrEmailTaken) {
 		c.Error(response.NewError(http.StatusConflict, "email already in use"))
 		return

@@ -10,6 +10,11 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required,min=8,max=72"`
 }
 
+// clientInfo is what the handler reads off the request for the service: IP, user agent and device_id cookie ("" if missing).
+type clientInfo struct {
+	ip, userAgent, deviceID string
+}
+
 // authTokens holds the values setAuthCookies writes to the client.
 type authTokens struct {
 	access, refresh, deviceID string

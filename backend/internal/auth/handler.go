@@ -12,6 +12,28 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// clientFrom reads the client's IP, user agent and device_id cookie ("" if missing) for the service layer.
+func clientFrom(c *gin.Context) clientInfo {
+	deviceID, _ := c.Cookie("device_id")
+	return clientInfo{ip: c.ClientIP(), userAgent: c.Request.UserAgent(), deviceID: deviceID}
+}
+
+// setAuthCookies sets the access_token, refresh_token and device_id cookies. Takes the request context and tokens; returns nothing.
+// Call only after the refresh row is committed, so the client never holds a token the database doesn't know.
+func setAuthCookies(c *gin.Context, t authTokens) {
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("access_token", t.access, int(auth.AccessTTL.Seconds()), "", "", true, true)
+	c.SetCookie("refresh_token", t.refresh, int(auth.RefreshTTL.Seconds()), "/auth", "", true, true)
+	c.SetCookie("device_id", t.deviceID, int(auth.DeviceTTL.Seconds()), "/auth", "", true, true)
+}
+
+// clearAuthCookies expires the access_token and refresh_token cookies. Takes the request context; returns nothing.
+func clearAuthCookies(c *gin.Context) {
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("access_token", "", -1, "", "", true, true)
+	c.SetCookie("refresh_token", "", -1, "/auth", "", true, true)
+}
+
 // Ping is a health check for the auth routes. Takes the request context; responds 200 with {"message": "pong"}.
 func Ping(c *gin.Context) {
 	response.Ok(c, gin.H{"message": "pong"}, nil)
@@ -25,7 +47,7 @@ func Register(c *gin.Context) {
 		c.Error(response.BadRequest(err))
 		return
 	}
-	newUser, err := user.CreateUserService(c, req)
+	newUser, err := user.CreateUserService(c.Request.Context(), req)
 	if errors.Is(err, user.ErrEmailTaken) {
 		c.Error(response.NewError(http.StatusConflict, "user already exists"))
 		return
@@ -35,7 +57,7 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	tokens, err := issueUserTokens(c, db.Pool, newUser.UserID, newUser.UserRole)
+	tokens, err := issueUserTokens(c.Request.Context(), db.Pool, newUser.UserID, newUser.UserRole, clientFrom(c))
 	if err != nil {
 		log.Printf("create user: %v", err)
 		c.Error(response.NewError(http.StatusInternalServerError, "account created, but we couldn't sign you in. Please log in"))
@@ -54,7 +76,7 @@ func RefreshToken(c *gin.Context) {
 		return
 	}
 
-	tokens, err := RotateRefreshTokenService(c, refreshToken)
+	tokens, err := RotateRefreshTokenService(c.Request.Context(), refreshToken, clientFrom(c))
 	if errors.Is(err, ErrRefreshExpired) {
 		c.Error(response.ErrUnauthorized)
 		return
@@ -73,7 +95,7 @@ func RefreshToken(c *gin.Context) {
 // Takes the request context; responds 200 even with no cookie or an already-revoked token, or 500 if the revoke fails.
 func Logout(c *gin.Context) {
 	if refreshToken, err := c.Cookie("refresh_token"); err == nil {
-		if err := RevokeRefreshTokenService(c, refreshToken); err != nil {
+		if err := RevokeRefreshTokenService(c.Request.Context(), refreshToken); err != nil {
 			log.Printf("logout: %v", err)
 			c.Error(response.ErrInternalServerError)
 			return
@@ -95,7 +117,7 @@ func ChangePassword(c *gin.Context) {
 		return
 	}
 
-	tokens, err := ChangePasswordService(c, u, req)
+	tokens, err := ChangePasswordService(c.Request.Context(), u, req, clientFrom(c))
 	if errors.Is(err, ErrWrongPassword) {
 		c.Error(response.NewError(http.StatusForbidden, "password is incorrect"))
 		return
@@ -119,7 +141,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	tokens, err := LoginUserService(c, req)
+	tokens, err := LoginUserService(c.Request.Context(), req, clientFrom(c))
 	if errors.Is(err, ErrInvalidCredentials) {
 		c.Error(response.ErrUnauthorized)
 		return
