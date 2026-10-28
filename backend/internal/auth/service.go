@@ -9,7 +9,6 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
-	"log"
 	"net/netip"
 	"sync"
 
@@ -153,15 +152,7 @@ func LoginUserService(ctx context.Context, loginRequest LoginRequest, client cli
 		return authTokens{}, err
 	}
 	if !known {
-		go func() {
-			// gin's Recovery middleware doesn't cover other goroutines, so without this a panic here would crash the server.
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("suspicious activity notification: %v", r)
-				}
-			}()
-			notification.SendSuspiciousActivityNotification(u.UserID, client.ip, client.userAgent)
-		}()
+		notification.SendSuspiciousActivityNotification(u.UserID, client.ip, client.userAgent)
 	}
 	return tokens, nil
 }
