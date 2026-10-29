@@ -147,12 +147,14 @@ func LoginUserService(ctx context.Context, loginRequest LoginRequest, client cli
 		}
 	}
 
+	// Alert before issuing tokens: the password was correct, so warn the user even if the session insert fails.
+	if !known {
+		notification.SendSuspiciousActivityNotification(u.UserID, client.ip, client.userAgent)
+	}
+
 	tokens, err := issueUserTokens(ctx, db.Pool, u.UserID, u.UserRole, client)
 	if err != nil {
 		return authTokens{}, err
-	}
-	if !known {
-		notification.SendSuspiciousActivityNotification(u.UserID, client.ip, client.userAgent)
 	}
 	return tokens, nil
 }
