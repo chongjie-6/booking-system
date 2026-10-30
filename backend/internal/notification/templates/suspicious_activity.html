@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:24px;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#18181b;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;">
+    <tr>
+      <td style="padding:32px;">
+        <h1 style="margin:0 0 16px;font-size:20px;">New login to your account</h1>
+        <p style="margin:0 0 16px;line-height:1.5;">Hi {{.FirstName}},</p>
+        <p style="margin:0 0 16px;line-height:1.5;">Your account was just logged in to from a new device or network.</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px;font-size:14px;">
+          <tr><td style="padding:4px 16px 4px 0;color:#71717a;">IP address</td><td style="padding:4px 0;">{{.IP}}</td></tr>
+          <tr><td style="padding:4px 16px 4px 0;color:#71717a;">Device</td><td style="padding:4px 0;">{{.Device}}</td></tr>
+        </table>
+        <p style="margin:0;line-height:1.5;">If this was you, you can ignore this email. If it wasn't, change your password now.</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

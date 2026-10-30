@@ -23,6 +23,7 @@ Settings come from environment variables, or from `backend/.env` (gitignored), w
 |---|---|---|
 | `DATABASE_URL` | yes | Postgres connection string, e.g. `postgres://user:pass@localhost:5432/booking` |
 | `JWT_PRIVATE_KEY` | yes | P-256 private key in PEM, for signing access tokens (ES256) |
+| `KAFKA_ADDRESS` | yes | Kafka brokers, comma-separated, e.g. `localhost:9092`. Login alerts go through the `notifications` topic |
 | `ALLOWED_ORIGINS` | yes | The one frontend origin allowed by CORS, e.g. `http://localhost:5173`; it isn't split on commas |
 | `PORT` | no | Port to listen on; default `8080` |
 | `GIN_MODE` | no | `debug` (default), `release` or `test` |
