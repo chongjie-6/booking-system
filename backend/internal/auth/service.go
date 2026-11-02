@@ -60,7 +60,7 @@ func ChangePasswordService(ctx context.Context, u *auth.UserInfo, req ChangePass
 // IP, user agent and device. The device is client.deviceID, or a new random ID if that is empty.
 // Takes the request context, querier, user ID, role and client; returns (tokens, err), with ErrBadToken if signing fails.
 // It doesn't set cookies: the handler passes the tokens to setAuthCookies once the row is committed.
-func issueUserTokens(ctx context.Context, q querier, userID string, userRole string, client clientInfo) (authTokens, error) {
+func issueUserTokens(ctx context.Context, q db.Querier, userID string, userRole string, client clientInfo) (authTokens, error) {
 	deviceID := client.deviceID
 	if deviceID == "" {
 		deviceID = rand.Text()
@@ -149,7 +149,7 @@ func LoginUserService(ctx context.Context, loginRequest LoginRequest, client cli
 
 	// Alert before issuing tokens: the password was correct, so warn the user even if the session insert fails.
 	if !known {
-		notification.SendSuspiciousActivityNotification(u.UserID, client.ip, client.userAgent)
+		notification.SendSuspiciousActivityNotification(ctx, u.UserID, client.ip, client.userAgent)
 	}
 
 	tokens, err := issueUserTokens(ctx, db.Pool, u.UserID, u.UserRole, client)

@@ -3,6 +3,7 @@ package app
 
 import (
 	"booking-system/internal/notification"
+	"booking-system/internal/outbox"
 	"booking-system/pkg/db"
 	"booking-system/pkg/email"
 	"booking-system/pkg/geoip"
@@ -44,7 +45,7 @@ func Middleware(r *gin.Engine) {
 	}))
 }
 
-// Serve starts the notification consumer and serves r until Ctrl+C or SIGTERM, then shuts down gracefully.
+// Serve starts the outbox relay and notification consumer and serves r until Ctrl+C or SIGTERM, then shuts down gracefully.
 // Takes a parent context and the engine; returns once shutdown has finished.
 func Serve(ctx context.Context, r *gin.Engine) {
 	sig, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
@@ -52,6 +53,7 @@ func Serve(ctx context.Context, r *gin.Engine) {
 
 	// Consumers stop on sig; shutdown waits for them so their last batch is handled and committed before exiting.
 	var consumers sync.WaitGroup
+	consumers.Go(func() { outbox.Relay(sig) })
 	consumers.Go(func() { notification.Consume(sig) })
 
 	srv := &http.Server{Addr: ":" + cmp.Or(os.Getenv("PORT"), "8080"), Handler: r} // same port r.Run() picked

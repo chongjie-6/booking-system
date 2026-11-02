@@ -55,8 +55,8 @@ func Connect() {
 // Handler handles one event, given its raw JSON to decode. A returned error sends it through the retry topics, then dead-letters it.
 type Handler func(ctx context.Context, event []byte) error
 
-// produce writes one record and waits for it to land. A var so tests can capture writes without Kafka.
-var produce = func(ctx context.Context, r *kgo.Record) error {
+// Produce writes one record and waits for it to land. A var so tests can capture writes without Kafka.
+var Produce = func(ctx context.Context, r *kgo.Record) error {
 	if Client == nil {
 		return errors.New("no producer")
 	}
@@ -188,7 +188,7 @@ func (c consumer) forward(r *kgo.Record, topic string, reason error) {
 		Value:   r.Value,
 		Headers: append(headers, kgo.RecordHeader{Key: "error", Value: []byte(reason.Error())}),
 	}
-	if err := produce(ctx, fwd); err != nil {
+	if err := Produce(ctx, fwd); err != nil {
 		log.Printf("kafka consumer %s: write to %s failed, offset %d dropped: %v", c.group, topic, r.Offset, err)
 	}
 }

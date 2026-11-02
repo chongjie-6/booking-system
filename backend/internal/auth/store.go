@@ -6,18 +6,11 @@ import (
 	"context"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
-
-// Satisfied by both db.Pool and pgx.Tx.
-type querier interface {
-	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
-	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
-}
 
 // dbSetPasswordAndRevokeTokens saves a new password hash and revokes every live refresh token the user has.
 // Takes a context, a Pool or Tx, the user ID and new hash; returns the database error, if any.
-func dbSetPasswordAndRevokeTokens(ctx context.Context, q querier, userID string, hash string) error {
+func dbSetPasswordAndRevokeTokens(ctx context.Context, q db.Querier, userID string, hash string) error {
 	args := pgx.NamedArgs{"user_id": userID, "hash": hash}
 	if _, err := q.Exec(ctx, `UPDATE users SET hashed_password = @hash WHERE user_id = @user_id`, args); err != nil {
 		return err
@@ -28,7 +21,7 @@ func dbSetPasswordAndRevokeTokens(ctx context.Context, q querier, userID string,
 
 // dbRevokeRefreshToken revokes a still-valid refresh token. Takes a context, a Pool or Tx, and the token hash; returns the old row,
 // or pgx.ErrNoRows if it was unknown, expired or already used. The UPDATE locks the row, so a concurrent reuse matches nothing.
-func dbRevokeRefreshToken(ctx context.Context, q querier, tokenHash string) (RefreshTokenRow, error) {
+func dbRevokeRefreshToken(ctx context.Context, q db.Querier, tokenHash string) (RefreshTokenRow, error) {
 	rows, _ := q.Query(ctx, `
 	WITH rt AS (
 		UPDATE refresh_tokens
@@ -48,7 +41,7 @@ func dbRevokeRefreshToken(ctx context.Context, q querier, tokenHash string) (Ref
 
 // dbInsertRefreshToken saves a new refresh token row. Takes a context, a Pool or Tx, and the row;
 // returns the saved row (with the user's role) or the database error.
-func dbInsertRefreshToken(ctx context.Context, q querier, refreshToken RefreshTokenRow) (RefreshTokenRow, error) {
+func dbInsertRefreshToken(ctx context.Context, q db.Querier, refreshToken RefreshTokenRow) (RefreshTokenRow, error) {
 	rows, _ := q.Query(ctx, `
 	WITH rt AS (
 		INSERT INTO

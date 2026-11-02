@@ -10,12 +10,12 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-// capture swaps produce for one that records which topic each write went to, for the length of the test.
+// capture swaps Produce for one that records which topic each write went to, for the length of the test.
 func capture(t *testing.T) *[]string {
 	var topics []string
-	old := produce
-	produce = func(_ context.Context, r *kgo.Record) error { topics = append(topics, r.Topic); return nil }
-	t.Cleanup(func() { produce = old })
+	old := Produce
+	Produce = func(_ context.Context, r *kgo.Record) error { topics = append(topics, r.Topic); return nil }
+	t.Cleanup(func() { Produce = old })
 	return &topics
 }
 

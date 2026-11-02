@@ -1,7 +1,9 @@
 package notification
 
 import (
+	"booking-system/internal/outbox"
 	"booking-system/internal/user"
+	"booking-system/pkg/db"
 	"booking-system/pkg/email"
 	"booking-system/pkg/mq"
 	"context"
@@ -10,8 +12,6 @@ import (
 	"html/template"
 	"log"
 	"strings"
-
-	"github.com/twmb/franz-go/pkg/kgo"
 )
 
 const suspiciousActivity = "suspiciousActivity"
@@ -25,29 +25,13 @@ var templateFS embed.FS
 // html/template escapes every value, so attacker-controlled input like the user agent can't inject markup or links into the email.
 var templates = template.Must(template.ParseFS(templateFS, "templates/*.html"))
 
-// SendSuspiciousActivityNotification queues a Kafka event so the user gets alerted about a login
-// from a new device or network. Never blocks; drops and logs the event if Kafka is unavailable.
-func SendSuspiciousActivityNotification(userID string, ip string, userAgent string) {
-	if mq.Client == nil {
-		log.Printf("kafka client unavailable, suspicious activity notification dropped for %s", userID)
-		return
+// SendSuspiciousActivityNotification saves an alert event to the outbox for the relay to send.
+// Logs and drops it if the insert fails, so a database error never fails the login.
+func SendSuspiciousActivityNotification(ctx context.Context, userID string, ip string, userAgent string) {
+	e := event{Type: suspiciousActivity, UserID: userID, IP: ip, UserAgent: userAgent}
+	if err := outbox.Enqueue(ctx, db.Pool, mq.NotificationsTopic, userID, e); err != nil {
+		log.Printf("suspicious activity notification for %s: %v", userID, err)
 	}
-
-	b, _ := json.Marshal(event{Type: suspiciousActivity, UserID: userID, IP: ip, UserAgent: userAgent})
-
-	r := &kgo.Record{
-		Topic: mq.NotificationsTopic,
-		Key:   []byte(userID),
-		Value: b,
-	}
-
-	// context.Background, not the request's: franz-go drops a record whose context is cancelled, and the request's ends on response.
-	// TryProduce, not Produce: it fails instead of blocking the login when the send buffer is full.
-	mq.Client.TryProduce(context.Background(), r, func(_ *kgo.Record, err error) {
-		if err != nil {
-			log.Printf("suspicious activity notification: %v", err)
-		}
-	})
 }
 
 // Consume sends the notification for each event on the notifications topic until ctx is cancelled.
