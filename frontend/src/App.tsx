@@ -1,4 +1,6 @@
-import { Fragment, useState, type CSSProperties, type Dispatch, type SetStateAction } from 'react'
+import { Fragment, useEffect, useState, type CSSProperties, type Dispatch, type SetStateAction } from 'react'
+import { api, type User } from './api'
+import { Auth } from './Auth'
 import {
   AISLES_AFTER,
   MAX_SEATS,
@@ -21,20 +23,40 @@ type View =
   | { step: 'seats'; showtime: Showtime }
   | { step: 'checkout'; showtime: Showtime }
   | { step: 'done'; booking: Booking }
+  | { step: 'signin'; resetToken?: string }
+
+// A reset email links to /#reset=<token>. Read it once, then drop it from the address bar and history.
+const resetToken = new URLSearchParams(location.hash.slice(1)).get('reset') ?? undefined
+if (resetToken) history.replaceState(null, '', location.pathname + location.search)
 
 export default function App() {
-  const [view, setView] = useState<View>({ step: 'films' })
+  const [view, setView] = useState<View>(resetToken ? { step: 'signin', resetToken } : { step: 'films' })
   const [day, setDay] = useState(0)
   const [seats, setSeats] = useState<string[]>([])
   const [booked, setBooked] = useState<Record<string, string[]>>({})
+  // undefined while the first lookup runs, null when signed out
+  const [user, setUser] = useState<User | null>()
+
+  useEffect(() => {
+    api<User>('/user').then(setUser, () => setUser(null))
+  }, [])
 
   function go(next: View) {
     setView(next)
     window.scrollTo(0, 0)
   }
 
-  function confirm(showtime: Showtime, name: string, email: string) {
-    const booking = { ref: crypto.randomUUID().slice(0, 6).toUpperCase(), name, email, showtime, seats }
+  function signOut() {
+    api('/auth/logout', { method: 'POST' }).then(
+      () => setUser(null),
+      () => alert("Couldn't sign you out. Please try again."),
+    )
+  }
+
+  // ponytail: bookings stay in memory until the booking endpoints exist
+  function confirm(showtime: Showtime, user: User) {
+    const ref = crypto.randomUUID().slice(0, 6).toUpperCase()
+    const booking = { ref, name: user.firstName, email: user.email, showtime, seats }
     setBooked({ ...booked, [showtime.id]: [...(booked[showtime.id] ?? []), ...seats] })
     setSeats([])
     go({ step: 'done', booking })
@@ -46,7 +68,35 @@ export default function App() {
         <button className="wordmark" onClick={() => go({ step: 'films' })}>
           Lantern
         </button>
+        {user ? (
+          <div className="account">
+            <span>{user.firstName}</span>
+            <button className="link" onClick={signOut}>
+              Sign out
+            </button>
+          </div>
+        ) : (
+          user === null &&
+          view.step !== 'signin' && (
+            <button className="link" onClick={() => go({ step: 'signin' })}>
+              Sign in
+            </button>
+          )
+        )}
       </header>
+
+      {view.step === 'signin' && (
+        <main>
+          <Auth
+            mode={view.resetToken ? 'reset' : 'login'}
+            resetToken={view.resetToken}
+            onSignedIn={(u) => {
+              setUser(u)
+              go({ step: 'films' })
+            }}
+          />
+        </main>
+      )}
 
       {view.step === 'films' && (
         <Films
@@ -72,11 +122,17 @@ export default function App() {
         <Checkout
           showtime={view.showtime}
           seats={seats}
+          user={user}
+          onSignedIn={setUser}
           onBack={() => go({ step: 'seats', showtime: view.showtime })}
-          onConfirm={(name, email) => confirm(view.showtime, name, email)}
+          onConfirm={(u) => confirm(view.showtime, u)}
         />
       )}
       {view.step === 'done' && <Done booking={view.booking} onAgain={() => go({ step: 'films' })} />}
+
+      <footer className="credit">
+        <a href="https://db-ip.com">IP Geolocation by DB-IP</a>
+      </footer>
     </>
   )
 }
@@ -242,13 +298,17 @@ function SeatPicker({
 function Checkout({
   showtime,
   seats,
+  user,
+  onSignedIn,
   onBack,
   onConfirm,
 }: {
   showtime: Showtime
   seats: string[]
+  user: User | null | undefined
+  onSignedIn: (u: User) => void
   onBack: () => void
-  onConfirm: (name: string, email: string) => void
+  onConfirm: (u: User) => void
 }) {
   return (
     <main>
@@ -257,24 +317,20 @@ function Checkout({
       </button>
       <h1>Confirm your booking</h1>
       <div className="checkout">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            const form = new FormData(e.currentTarget)
-            onConfirm(String(form.get('name')).trim(), String(form.get('email')).trim())
-          }}
-        >
-          <label>
-            Name
-            <input name="name" required autoComplete="name" />
-          </label>
-          <label>
-            Email
-            <input name="email" type="email" required autoComplete="email" />
-          </label>
-          <p className="fine">We'll send your tickets to this address.</p>
-          <button className="primary">Confirm booking</button>
-        </form>
+        {user ? (
+          <div className="fields">
+            <p>
+              Booking as {user.firstName} {user.lastName}. We'll send your tickets to {user.email}.
+            </p>
+            <button className="primary" onClick={() => onConfirm(user)}>
+              Confirm booking
+            </button>
+          </div>
+        ) : user === null ? (
+          <Auth onSignedIn={onSignedIn} />
+        ) : (
+          <div />
+        )}
         <Ticket showtime={showtime} seats={seats} />
       </div>
     </main>

@@ -11,6 +11,7 @@
   --muted: #c9a7ad;
   --ink: #2a0a12;
   --ink-soft: #7a4a52;
+  --error: #f59aa6;
 
   --display: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
   --sans: 'Figtree', system-ui, sans-serif;
@@ -78,6 +79,10 @@ p {
 }
 
 .masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 20px 0;
   margin-bottom: 32px;
   border-bottom: 1px solid var(--curtain);
@@ -91,6 +96,35 @@ p {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--brass);
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: var(--muted);
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+
+  &:hover {
+    color: var(--paper);
+  }
+}
+
+.credit {
+  margin-top: 64px;
+  font-size: 0.8125rem;
+
+  a {
+    color: var(--muted);
+  }
 }
 
 .meta {
@@ -398,12 +432,14 @@ p {
     grid-template-columns: minmax(0, 1fr);
     gap: 32px;
   }
+}
 
-  form {
-    display: grid;
-    gap: 20px;
-    max-width: 420px;
-  }
+/* Forms */
+
+.fields {
+  display: grid;
+  gap: 20px;
+  max-width: 420px;
 
   label {
     display: grid;
@@ -427,10 +463,14 @@ p {
   }
 }
 
-.fine {
-  margin-top: -8px;
-  color: var(--muted);
-  font-size: 0.875rem;
+.error {
+  color: var(--error);
+}
+
+.switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
 }
 
 /* Ticket */
