@@ -1,0 +1,23 @@
+# Local Postgres, Redis and Kafka for the backend: `docker compose up -d`.
+# Matching settings: DATABASE_URL=postgres://booking:booking@localhost:5432/booking, REDIS_ADDRESS=localhost:6379, KAFKA_ADDRESS=localhost:9092
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: booking
+      POSTGRES_PASSWORD: booking
+      POSTGRES_DB: booking
+    ports: ["5432:5432"]
+    volumes: [postgres:/var/lib/postgresql]
+
+  redis:
+    image: redis:8
+    ports: ["6379:6379"]
+
+  # Single-node KRaft broker; its defaults advertise localhost:9092 and create topics on first use.
+  kafka:
+    image: apache/kafka:4.1.0
+    ports: ["9092:9092"]
+
+volumes:
+  postgres:
