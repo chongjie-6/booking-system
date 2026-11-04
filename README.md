@@ -15,7 +15,7 @@ frontend/     React + TypeScript + Vite app
 
 ## Backend
 
-Requires Go 1.27+ and PostgreSQL 18+ (the migrations use `uuidv7()`). Redis is optional; without it the server logs a warning and skips rate limiting. [air](https://github.com/air-verse/air) is pinned as a Go tool in `go.mod`, so it needs no separate install.
+Requires Go 1.27+ and PostgreSQL 18+ (the migrations use `uuidv7()`). Redis is optional; without it the server logs a warning and skips rate limiting and seat holds (see [Design decisions](#design-decisions)). [air](https://github.com/air-verse/air) is pinned as a Go tool in `go.mod`, so it needs no separate install.
 
 Settings come from environment variables, or from `backend/.env` (gitignored), which is loaded on startup:
 
@@ -66,6 +66,10 @@ mv data/dbip-country-lite.mmdb.tmp data/dbip-country-lite.mmdb
 Stop the server before replacing the file, and start it again afterwards. Set `GEOIP_DB_PATH` to keep the file somewhere else. Without the file, the server logs a warning and only compares IP ranges.
 
 DB-IP Lite is licensed under CC BY 4.0, so the site must show the credit "IP Geolocation by DB-IP" linking to https://db-ip.com.
+
+### Design decisions
+
+**Seat holds live in Redis, and booking keeps working when Redis is down.** Choosing seats holds them in Redis with a TTL, one key per seat, while the user pays. A `bookings` row is only written once payment succeeds, so every row is a paid booking. If Redis is unreachable, booking skips the hold instead of failing: two users can then both reach checkout and pay for the same seat. Postgres still allows only one of them to keep it (`booking_seats` is unique on `(event_id, seat_id)`), so the second payment's insert fails and that payment is refunded. We accept the occasional refund during a Redis outage over having booking go down with Redis.
 
 ## Frontend
 
