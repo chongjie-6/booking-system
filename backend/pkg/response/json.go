@@ -75,10 +75,16 @@ func (e *AppError) Error() string {
 	return e.Message
 }
 
+// maxBody caps how much of a request body Bind reads, so a huge body can't tie up memory. Request bodies here are small JSON.
+const maxBody = 1 << 20 // 1 MiB
+
 // Bind decodes the JSON request body into v and validates it. Takes the request and a pointer to the struct;
-// returns nil, or a 400 *AppError that tells the user what to fix.
+// returns nil, a 413 *AppError if the body is over maxBody, or a 400 *AppError that tells the user what to fix.
 func Bind(r *http.Request, v any) error {
-	if err := decode(r.Body, v); err != nil {
+	if err := decode(http.MaxBytesReader(nil, r.Body, maxBody), v); err != nil {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
+			return NewError(http.StatusRequestEntityTooLarge, "request body is too large")
+		}
 		return NewError(http.StatusBadRequest, bindMessage(err))
 	}
 	return nil

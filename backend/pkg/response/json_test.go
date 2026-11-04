@@ -1,10 +1,23 @@
 package response
 
 import (
-	"testing"
-
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
+	"testing"
 )
+
+// TestBindTooLarge checks that a body over maxBody is refused with 413 rather than read in full.
+// Takes the test runner; fails the test if Bind accepts it or returns another status.
+func TestBindTooLarge(t *testing.T) {
+	body := `{"firstName":"` + strings.Repeat("a", maxBody) + `"}`
+	var s signup
+	err := Bind(httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body)), &s)
+	if e, ok := errors.AsType[*AppError](err); !ok || e.Status != http.StatusRequestEntityTooLarge {
+		t.Fatalf("got %v, want a 413 *AppError", err)
+	}
+}
 
 type signup struct {
 	FirstName string `json:"firstName" validate:"required"`
