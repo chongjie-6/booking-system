@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -155,7 +156,7 @@ func RateLimiterMiddleware(limiter *TokenBucket, keyFn func(*http.Request) strin
 			time.Now().Add(time.Duration(limiter.refillInterval*float64(time.Second))).Unix(), 10))
 
 		if !allowed {
-			h.Set("Retry-After", "1")
+			h.Set("Retry-After", strconv.Itoa(int(math.Ceil(limiter.refillInterval)))) // seconds until the next token
 			response.Error(w, response.ErrTooManyRequests)
 			return
 		}
