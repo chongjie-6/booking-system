@@ -4,154 +4,166 @@ import (
 	"booking-system/internal/user"
 	"booking-system/pkg/auth"
 	"booking-system/pkg/db"
+	"booking-system/pkg/middleware"
 	"booking-system/pkg/response"
 	"errors"
 	"log"
 	"net/http"
-
-	"github.com/gin-gonic/gin"
+	"time"
 )
 
+// cookie returns the named cookie's value, or "" if the request doesn't have it.
+func cookie(r *http.Request, name string) string {
+	c, err := r.Cookie(name)
+	if err != nil {
+		return ""
+	}
+	return c.Value
+}
+
+// setCookie sets a secure, HTTP-only, SameSite=Lax cookie. A negative maxAge deletes it. Takes the writer and cookie fields; returns nothing.
+func setCookie(w http.ResponseWriter, name, value, path string, maxAge time.Duration) {
+	http.SetCookie(w, &http.Cookie{Name: name, Value: value, Path: path, MaxAge: int(maxAge.Seconds()),
+		Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+}
+
 // clientFrom reads the client's IP, user agent and device_id cookie ("" if missing) for the service layer.
-func clientFrom(c *gin.Context) clientInfo {
-	deviceID, _ := c.Cookie("device_id")
-	return clientInfo{ip: c.ClientIP(), userAgent: c.Request.UserAgent(), deviceID: deviceID}
+func clientFrom(r *http.Request) clientInfo {
+	return clientInfo{ip: middleware.ClientIP(r), userAgent: r.UserAgent(), deviceID: cookie(r, "device_id")}
 }
 
-// setAuthCookies sets the access_token, refresh_token and device_id cookies. Takes the request context and tokens; returns nothing.
+// setAuthCookies sets the access_token, refresh_token and device_id cookies. Takes the writer and tokens; returns nothing.
 // Call only after the refresh row is committed, so the client never holds a token the database doesn't know.
-func setAuthCookies(c *gin.Context, t authTokens) {
-	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie("access_token", t.access, int(auth.AccessTTL.Seconds()), "", "", true, true)
-	c.SetCookie("refresh_token", t.refresh, int(auth.RefreshTTL.Seconds()), "/auth", "", true, true)
-	c.SetCookie("device_id", t.deviceID, int(auth.DeviceTTL.Seconds()), "/auth", "", true, true)
+func setAuthCookies(w http.ResponseWriter, t authTokens) {
+	setCookie(w, "access_token", t.access, "/", auth.AccessTTL)
+	setCookie(w, "refresh_token", t.refresh, "/auth", auth.RefreshTTL)
+	setCookie(w, "device_id", t.deviceID, "/auth", auth.DeviceTTL)
 }
 
-// clearAuthCookies expires the access_token and refresh_token cookies. Takes the request context; returns nothing.
-func clearAuthCookies(c *gin.Context) {
-	c.SetSameSite(http.SameSiteLaxMode)
-	c.SetCookie("access_token", "", -1, "", "", true, true)
-	c.SetCookie("refresh_token", "", -1, "/auth", "", true, true)
+// clearAuthCookies expires the access_token and refresh_token cookies. Takes the writer; returns nothing.
+func clearAuthCookies(w http.ResponseWriter) {
+	setCookie(w, "access_token", "", "/", -1)
+	setCookie(w, "refresh_token", "", "/auth", -1)
 }
 
-// Ping is a health check for the auth routes. Takes the request context; responds 200 with {"message": "pong"}.
-func Ping(c *gin.Context) {
-	response.Ok(c, gin.H{"message": "pong"}, nil)
+// Ping is a health check for the auth routes. Takes the request; responds 200 with {"message": "pong"}.
+func Ping(w http.ResponseWriter, r *http.Request) {
+	response.Ok(w, map[string]string{"message": "pong"}, nil)
 }
 
 // Register creates an account from a CreateUserRequest JSON body and signs the user in.
-// Takes the request context; responds 201 with the new user and sets auth cookies, or 400/409/500 on error.
-func Register(c *gin.Context) {
+// Takes the request; responds 201 with the new user and sets auth cookies, or 400/409/500 on error.
+func Register(w http.ResponseWriter, r *http.Request) {
 	var req user.CreateUserRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(response.BadRequest(err))
+	if err := response.Bind(r, &req); err != nil {
+		response.Error(w, err)
 		return
 	}
-	newUser, err := user.CreateUserService(c.Request.Context(), req)
+	newUser, err := user.CreateUserService(r.Context(), req)
 	if errors.Is(err, user.ErrEmailTaken) {
-		c.Error(response.NewError(http.StatusConflict, "user already exists"))
+		response.Error(w, response.NewError(http.StatusConflict, "user already exists"))
 		return
 	}
 	if err != nil {
-		c.Error(response.ErrInternalServerError)
+		response.Error(w, response.ErrInternalServerError)
 		return
 	}
 
-	tokens, err := issueUserTokens(c.Request.Context(), db.Pool, newUser.UserID, newUser.UserRole, clientFrom(c))
+	tokens, err := issueUserTokens(r.Context(), db.Pool, newUser.UserID, newUser.UserRole, clientFrom(r))
 	if err != nil {
 		log.Printf("create user: %v", err)
-		c.Error(response.NewError(http.StatusInternalServerError, "account created, but we couldn't sign you in. Please log in"))
+		response.Error(w, response.NewError(http.StatusInternalServerError, "account created, but we couldn't sign you in. Please log in"))
 		return
 	}
-	setAuthCookies(c, tokens)
-	response.Created(c, newUser)
+	setAuthCookies(w, tokens)
+	response.Created(w, newUser)
 }
 
 // RefreshToken swaps the refresh_token cookie for a new access + refresh pair.
-// Takes the request context; responds 200 with fresh auth cookies, or 401 if the token is unknown, expired or already used.
-func RefreshToken(c *gin.Context) {
-	refreshToken, err := c.Cookie("refresh_token")
-	if err != nil {
-		c.Error(response.ErrUnauthorized)
+// Takes the request; responds 200 with fresh auth cookies, or 401 if the token is unknown, expired or already used.
+func RefreshToken(w http.ResponseWriter, r *http.Request) {
+	refreshToken := cookie(r, "refresh_token")
+	if refreshToken == "" {
+		response.Error(w, response.ErrUnauthorized)
 		return
 	}
 
-	tokens, err := RotateRefreshTokenService(c.Request.Context(), refreshToken, clientFrom(c))
+	tokens, err := RotateRefreshTokenService(r.Context(), refreshToken, clientFrom(r))
 	if errors.Is(err, ErrRefreshExpired) {
-		c.Error(response.ErrUnauthorized)
+		response.Error(w, response.ErrUnauthorized)
 		return
 	}
 	if err != nil {
 		log.Printf("refresh token: %v", err)
-		c.Error(response.ErrInternalServerError)
+		response.Error(w, response.ErrInternalServerError)
 		return
 	}
 
-	setAuthCookies(c, tokens)
-	response.Ok(c, nil, nil)
+	setAuthCookies(w, tokens)
+	response.Ok(w, nil, nil)
 }
 
 // Logout revokes the refresh_token cookie and clears both auth cookies.
-// Takes the request context; responds 200 even with no cookie or an already-revoked token, or 500 if the revoke fails.
-func Logout(c *gin.Context) {
-	if refreshToken, err := c.Cookie("refresh_token"); err == nil {
-		if err := RevokeRefreshTokenService(c.Request.Context(), refreshToken); err != nil {
+// Takes the request; responds 200 even with no cookie or an already-revoked token, or 500 if the revoke fails.
+func Logout(w http.ResponseWriter, r *http.Request) {
+	if refreshToken := cookie(r, "refresh_token"); refreshToken != "" {
+		if err := RevokeRefreshTokenService(r.Context(), refreshToken); err != nil {
 			log.Printf("logout: %v", err)
-			c.Error(response.ErrInternalServerError)
+			response.Error(w, response.ErrInternalServerError)
 			return
 		}
 	}
-	clearAuthCookies(c)
-	response.Ok(c, nil, nil)
+	clearAuthCookies(w)
+	response.Ok(w, nil, nil)
 
 }
 
 // ChangePassword sets a new password, signs out every other session and re-signs this one.
-// Takes the request context (with "user" set by middleware.Auth); responds 200 with fresh cookies, or 400/403/500.
-func ChangePassword(c *gin.Context) {
-	u, _ := c.MustGet("user").(*auth.UserInfo)
+// Takes the request (with "user" set by middleware.Auth); responds 200 with fresh cookies, or 400/403/500.
+func ChangePassword(w http.ResponseWriter, r *http.Request) {
+	u := middleware.User(r)
 
 	var req ChangePasswordRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.Error(response.BadRequest(err))
+	if err := response.Bind(r, &req); err != nil {
+		response.Error(w, err)
 		return
 	}
 
-	tokens, err := ChangePasswordService(c.Request.Context(), u, req, clientFrom(c))
+	tokens, err := ChangePasswordService(r.Context(), u, req, clientFrom(r))
 	if errors.Is(err, ErrWrongPassword) {
-		c.Error(response.NewError(http.StatusForbidden, "password is incorrect"))
+		response.Error(w, response.NewError(http.StatusForbidden, "password is incorrect"))
 		return
 	}
 	if err != nil {
 		log.Printf("change password: %v", err)
-		c.Error(response.ErrInternalServerError)
+		response.Error(w, response.ErrInternalServerError)
 		return
 	}
 
-	setAuthCookies(c, tokens)
-	response.Ok(c, nil, nil)
+	setAuthCookies(w, tokens)
+	response.Ok(w, nil, nil)
 }
 
 // Login signs the user in from a LoginRequest JSON body.
-// Takes the request context; responds 200 with auth cookies, 400 if the body is invalid, 401 for a wrong email or password, or 500 on error.
-func Login(c *gin.Context) {
+// Takes the request; responds 200 with auth cookies, 400 if the body is invalid, 401 for a wrong email or password, or 500 on error.
+func Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
-	if err := c.ShouldBindBodyWithJSON(&req); err != nil {
-		c.Error(response.BadRequest(err))
+	if err := response.Bind(r, &req); err != nil {
+		response.Error(w, err)
 		return
 	}
 
-	tokens, err := LoginUserService(c.Request.Context(), req, clientFrom(c))
+	tokens, err := LoginUserService(r.Context(), req, clientFrom(r))
 	if errors.Is(err, ErrInvalidCredentials) {
-		c.Error(response.ErrUnauthorized)
+		response.Error(w, response.ErrUnauthorized)
 		return
 	}
 	if err != nil {
 		log.Printf("login: %v", err)
-		c.Error(response.ErrInternalServerError)
+		response.Error(w, response.ErrInternalServerError)
 		return
 	}
 
-	setAuthCookies(c, tokens)
-	response.Ok(c, nil, nil)
+	setAuthCookies(w, tokens)
+	response.Ok(w, nil, nil)
 }

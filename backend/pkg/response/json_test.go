@@ -3,13 +3,13 @@ package response
 import (
 	"testing"
 
-	"github.com/gin-gonic/gin/binding"
+	"strings"
 )
 
 type signup struct {
-	FirstName string `json:"firstName" binding:"required"`
-	Email     string `json:"email" binding:"required,email"`
-	Password  string `json:"password" binding:"required,min=8"`
+	FirstName string `json:"firstName" validate:"required"`
+	Email     string `json:"email" validate:"required,email"`
+	Password  string `json:"password" validate:"required,min=8"`
 }
 
 // TestBindMessage checks that each bad request body maps to the expected message.
@@ -25,7 +25,7 @@ func TestBindMessage(t *testing.T) {
 	}
 	for body, want := range cases {
 		var s signup
-		err := binding.JSON.BindBody([]byte(body), &s)
+		err := decode(strings.NewReader(body), &s)
 		if got := bindMessage(err); got != want {
 			t.Errorf("%q: got %q, want %q", body, got, want)
 		}

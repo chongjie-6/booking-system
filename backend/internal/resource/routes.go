@@ -1,15 +1,13 @@
 package resource
 
 import (
+	"booking-system/pkg/response"
 	"net/http"
-
-	"github.com/gin-gonic/gin"
 )
 
-// Routes mounts the /resources endpoints (just a ping for now). Takes the Gin engine; returns nothing.
-func Routes(r *gin.Engine) {
-	resourceRoutes := r.Group("/resources")
-	{
-		resourceRoutes.GET("/ping", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"message": "pong"}) })
-	}
+// Routes mounts the /resources endpoints (just a ping for now). Takes the mux; returns nothing.
+func Routes(r *http.ServeMux) {
+	r.HandleFunc("GET /resources/ping", func(w http.ResponseWriter, _ *http.Request) {
+		response.JSON(w, http.StatusOK, map[string]string{"message": "pong"})
+	})
 }

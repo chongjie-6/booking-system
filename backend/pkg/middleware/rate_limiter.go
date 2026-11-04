@@ -6,10 +6,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"strconv"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -137,28 +137,28 @@ func NewBucket() *TokenBucket {
 	})
 }
 
-// RateLimiterMiddleware gives each keyFn(c) value its own bucket and responds 429 once it's empty; if Redis errors, the request is let through.
-// Takes the limiter and a key function (e.g. client IP); returns a gin.HandlerFunc that also sets X-RateLimit-* headers.
-func RateLimiterMiddleware(limiter *TokenBucket, keyFn func(c *gin.Context) string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		allowed, remaining, err := limiter.Allow(c.Request.Context(), keyFn(c))
+// RateLimiterMiddleware gives each keyFn(r) value its own bucket and responds 429 once it's empty; if Redis errors, the request is let through.
+// Takes the limiter, a key function (e.g. ClientIP) and the handler to wrap; returns the wrapped handler, which also sets X-RateLimit-* headers.
+func RateLimiterMiddleware(limiter *TokenBucket, keyFn func(*http.Request) string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		allowed, remaining, err := limiter.Allow(r.Context(), keyFn(r))
 		if err != nil {
 			log.Printf("rate limiter skipped: %v", err)
-			c.Next()
+			next.ServeHTTP(w, r)
 			return
 		}
 
-		c.Header("X-RateLimit-Limit", strconv.Itoa(limiter.capacity))
-		c.Header("X-RateLimit-Remaining", strconv.FormatFloat(remaining, 'f', 0, 64))
-		c.Header("X-RateLimit-Reset", strconv.FormatInt(
+		h := w.Header()
+		h.Set("X-RateLimit-Limit", strconv.Itoa(limiter.capacity))
+		h.Set("X-RateLimit-Remaining", strconv.FormatFloat(remaining, 'f', 0, 64))
+		h.Set("X-RateLimit-Reset", strconv.FormatInt(
 			time.Now().Add(time.Duration(limiter.refillInterval*float64(time.Second))).Unix(), 10))
 
 		if !allowed {
-			c.Header("Retry-After", "1")
-			c.Error(response.ErrTooManyRequests)
-			c.Abort()
+			h.Set("Retry-After", "1")
+			response.Error(w, response.ErrTooManyRequests)
 			return
 		}
-		c.Next()
-	}
+		next.ServeHTTP(w, r)
+	})
 }

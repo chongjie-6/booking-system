@@ -8,12 +8,11 @@ import (
 	"booking-system/internal/payment"
 	"booking-system/internal/resource"
 	"booking-system/internal/user"
-
-	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
-// New mounts every feature's routes onto the engine. Takes the Gin engine; returns nothing.
-func New(r *gin.Engine) {
+// New mounts every feature's routes onto the mux. Takes the mux; returns nothing.
+func New(r *http.ServeMux) {
 	user.Routes(r)
 	booking.Routes(r)
 	resource.Routes(r)

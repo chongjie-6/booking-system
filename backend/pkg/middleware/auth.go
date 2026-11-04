@@ -3,29 +3,34 @@ package middleware
 import (
 	"booking-system/pkg/auth"
 	"booking-system/pkg/response"
-
-	"github.com/gin-gonic/gin"
+	"context"
+	"net/http"
 )
 
-// Auth builds middleware that rejects requests with a 401 unless the access_token cookie is valid.
-// Takes nothing; returns a gin.HandlerFunc that stores the token's *auth.UserInfo under "user" for later handlers.
-func Auth() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		token, err := c.Cookie("access_token")
+type userKey struct{}
+
+// Auth wraps next so it only runs when the access_token cookie is valid; otherwise it responds 401.
+// Takes the handler; returns it wrapped, with the token's *auth.UserInfo readable through User.
+func Auth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		cookie, err := r.Cookie("access_token")
 		if err != nil {
-			c.Error(response.ErrUnauthorized)
-			c.Abort()
+			response.Error(w, response.ErrUnauthorized)
 			return
 		}
 
-		claims, err := auth.ParseJWT(token)
+		claims, err := auth.ParseJWT(cookie.Value)
 		if err != nil || claims.User == nil {
-			c.Error(response.ErrUnauthorized)
-			c.Abort()
+			response.Error(w, response.ErrUnauthorized)
 			return
 		}
 
-		c.Set("user", claims.User)
-		c.Next()
+		next(w, r.WithContext(context.WithValue(r.Context(), userKey{}, claims.User)))
 	}
+}
+
+// User returns the signed-in user that Auth stored on the request. Takes the request; returns nil outside an Auth-wrapped handler.
+func User(r *http.Request) *auth.UserInfo {
+	u, _ := r.Context().Value(userKey{}).(*auth.UserInfo)
+	return u
 }

@@ -5,24 +5,22 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"reflect"
 	"strings"
 
-	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
 	"github.com/go-playground/validator/v10"
 )
 
-// init makes validation errors use the JSON field name (firstName) instead of the Go one (FirstName).
-// Runs once when the package loads; no input or output.
-func init() {
-	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
-		v.RegisterTagNameFunc(func(f reflect.StructField) string {
-			return strings.SplitN(f.Tag.Get("json"), ",", 2)[0]
-		})
-	}
-}
+// validate checks request structs against their `validate` tags. Errors use the JSON field name (firstName) instead of the Go one (FirstName).
+var validate = func() *validator.Validate {
+	v := validator.New()
+	v.RegisterTagNameFunc(func(f reflect.StructField) string {
+		return strings.SplitN(f.Tag.Get("json"), ",", 2)[0]
+	})
+	return v
+}()
 
 type Response struct {
 	Success bool      `json:"success"`
@@ -77,10 +75,21 @@ func (e *AppError) Error() string {
 	return e.Message
 }
 
-// BadRequest turns a ShouldBindJSON error into a 400 that tells the user what to fix.
-// Takes the bind error; returns the *AppError.
-func BadRequest(err error) *AppError {
-	return NewError(http.StatusBadRequest, bindMessage(err))
+// Bind decodes the JSON request body into v and validates it. Takes the request and a pointer to the struct;
+// returns nil, or a 400 *AppError that tells the user what to fix.
+func Bind(r *http.Request, v any) error {
+	if err := decode(r.Body, v); err != nil {
+		return NewError(http.StatusBadRequest, bindMessage(err))
+	}
+	return nil
+}
+
+// decode reads JSON from body into v, then validates v. Takes the body and a pointer to the struct; returns the decode or validation error.
+func decode(body io.Reader, v any) error {
+	if err := json.NewDecoder(body).Decode(v); err != nil {
+		return err
+	}
+	return validate.Struct(v)
 }
 
 // bindMessage turns a JSON bind error (empty body, bad JSON, wrong type, failed validation) into a readable message.
@@ -132,39 +141,31 @@ func fieldMessage(fe validator.FieldError) string {
 	return f + " is invalid"
 }
 
-// Ok sends a 200 {success: true} response. Takes the request context, the data and optional pagination meta; returns nothing.
-func Ok(c *gin.Context, data any, meta *Meta) {
-	c.JSON(http.StatusOK, Response{
-		Success: true,
-		Data:    data,
-		Meta:    meta,
-	})
-}
-
-// Created sends a 201 {success: true} response for a new resource. Takes the request context and the data; returns nothing.
-func Created(c *gin.Context, data any) {
-	c.JSON(http.StatusCreated, Response{
-		Success: true,
-		Data:    data,
-	})
-}
-
-// ErrorHandler builds middleware that, after the handlers run, sends the last c.Error as the JSON error response.
-// Takes nothing; returns the gin.HandlerFunc. Non-*AppError errors become a 500, so internal details never reach the client.
-func ErrorHandler() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Next()
-
-		// If no error, continue with main func
-		if len(c.Errors) == 0 {
-			return
-		}
-
-		appError, ok := errors.AsType[*AppError](c.Errors.Last().Err)
-		if !ok {
-			appError = ErrInternalServerError
-		}
-
-		c.AbortWithStatusJSON(appError.Status, &Response{Success: false, Error: appError})
+// JSON sends v as a JSON response with the given status. Takes the writer, status and value; returns nothing.
+func JSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Printf("write response: %v", err)
 	}
+}
+
+// Ok sends a 200 {success: true} response. Takes the writer, the data and optional pagination meta; returns nothing.
+func Ok(w http.ResponseWriter, data any, meta *Meta) {
+	JSON(w, http.StatusOK, Response{Success: true, Data: data, Meta: meta})
+}
+
+// Created sends a 201 {success: true} response for a new resource. Takes the writer and the data; returns nothing.
+func Created(w http.ResponseWriter, data any) {
+	JSON(w, http.StatusCreated, Response{Success: true, Data: data})
+}
+
+// Error sends err as the JSON error response. Takes the writer and the error; returns nothing.
+// Non-*AppError errors become a 500, so internal details never reach the client.
+func Error(w http.ResponseWriter, err error) {
+	appError, ok := errors.AsType[*AppError](err)
+	if !ok {
+		appError = ErrInternalServerError
+	}
+	JSON(w, appError.Status, &Response{Success: false, Error: appError})
 }

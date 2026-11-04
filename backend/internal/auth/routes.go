@@ -2,19 +2,16 @@ package auth
 
 import (
 	"booking-system/pkg/middleware"
-
-	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
-// Routes mounts the /auth endpoints (ping, refresh, login, logout, register, password). Takes the Gin engine; returns nothing.
-func Routes(r *gin.Engine) {
-	authRoutes := r.Group("/auth")
+// Routes mounts the /auth endpoints (ping, refresh, login, logout, register, password). Takes the mux; returns nothing.
+func Routes(r *http.ServeMux) {
+	r.HandleFunc("GET /auth/ping", Ping)
 
-	authRoutes.GET("/ping", Ping)
-
-	authRoutes.POST("/refresh", RefreshToken)
-	authRoutes.POST("/login", Login)
-	authRoutes.POST("/logout", Logout)
-	authRoutes.POST("/register", Register)
-	authRoutes.POST("/password", middleware.Auth(), ChangePassword)
+	r.HandleFunc("POST /auth/refresh", RefreshToken)
+	r.HandleFunc("POST /auth/login", Login)
+	r.HandleFunc("POST /auth/logout", Logout)
+	r.HandleFunc("POST /auth/register", Register)
+	r.HandleFunc("POST /auth/password", middleware.Auth(ChangePassword))
 }

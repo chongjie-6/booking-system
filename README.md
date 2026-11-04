@@ -26,7 +26,6 @@ Settings come from environment variables, or from `backend/.env` (gitignored), w
 | `KAFKA_ADDRESS` | yes | Kafka brokers, comma-separated, e.g. `localhost:9092`. Login alerts go through the `notifications` topic |
 | `ALLOWED_ORIGINS` | yes | The one frontend origin allowed by CORS, e.g. `http://localhost:5173`; it isn't split on commas |
 | `PORT` | no | Port to listen on; default `8080` |
-| `GIN_MODE` | no | `debug` (default), `release` or `test` |
 | `REDIS_ADDRESS`, `REDIS_PASSWORD` | no | Redis for rate limiting, e.g. `localhost:6379` |
 | `GEOIP_DB_PATH` | no | See [IP country database](#ip-country-database) |
 

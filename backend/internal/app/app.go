@@ -10,7 +10,6 @@ import (
 	"booking-system/pkg/middleware"
 	"booking-system/pkg/mq"
 	"booking-system/pkg/rdb"
-	"booking-system/pkg/response"
 	"cmp"
 	"context"
 	"errors"
@@ -21,8 +20,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"github.com/gin-gonic/gin"
 )
 
 // Connect connects Postgres (and runs migrations), Redis, GeoIP, Kafka and Resend. Takes a context for the connections; returns nothing.
@@ -35,19 +32,18 @@ func Connect(ctx context.Context) {
 	email.Connect()
 }
 
-// Middleware applies security headers, CORS, the JSON error handler and the per-IP rate limiter. Takes the Gin engine; returns nothing.
-func Middleware(r *gin.Engine) {
-	r.Use(middleware.SecurityHeaders())
-	r.Use(middleware.CORS())
-	r.Use(response.ErrorHandler())
-	r.Use(middleware.RateLimiterMiddleware(middleware.NewBucket(), func(c *gin.Context) string {
-		return c.ClientIP()
-	}))
+// Middleware wraps h in request logging, security headers, CORS and the per-IP rate limiter, outermost first.
+// Takes the handler; returns the wrapped handler.
+func Middleware(h http.Handler) http.Handler {
+	h = middleware.RateLimiterMiddleware(middleware.NewBucket(), middleware.ClientIP, h)
+	h = middleware.CORS(h)
+	h = middleware.SecurityHeaders(h)
+	return middleware.Logger(h)
 }
 
 // Serve starts the outbox relay and notification consumer and serves r until Ctrl+C or SIGTERM, then shuts down gracefully.
-// Takes a parent context and the engine; returns once shutdown has finished.
-func Serve(ctx context.Context, r *gin.Engine) {
+// Takes a parent context and the handler; returns once shutdown has finished.
+func Serve(ctx context.Context, h http.Handler) {
 	sig, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -56,7 +52,7 @@ func Serve(ctx context.Context, r *gin.Engine) {
 	consumers.Go(func() { outbox.Relay(sig) })
 	consumers.Go(func() { notification.Consume(sig) })
 
-	srv := &http.Server{Addr: ":" + cmp.Or(os.Getenv("PORT"), "8080"), Handler: r} // same port r.Run() picked
+	srv := &http.Server{Addr: ":" + cmp.Or(os.Getenv("PORT"), "8080"), Handler: h}
 	go func() {
 		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("server: %v", err)
