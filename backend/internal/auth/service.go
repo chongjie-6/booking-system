@@ -20,7 +20,37 @@ var (
 	ErrBadToken           = errors.New("jwt could not be issued")
 	ErrInvalidCredentials = errors.New("invalid email or password")
 	ErrWrongPassword      = errors.New("current password is incorrect")
+	ErrResetTokenInvalid  = errors.New("reset token is unknown, expired or used")
 )
+
+// ForgotPasswordService queues a password reset email if a user has this email. The notification consumer makes the token
+// when it sends the email. Takes a context and email; returns nil for an unknown email too, or the database error.
+func ForgotPasswordService(ctx context.Context, email string) error {
+	u, err := dbGetUserPasswordHashFromEmail(ctx, email)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return notification.SendPasswordResetNotification(ctx, u.UserID)
+}
+
+// ResetPasswordService uses up a reset token, then saves the new password and revokes every refresh token, in one transaction.
+// Takes a context and request; returns ErrResetTokenInvalid if the token is unknown, expired or used, or the database error.
+func ResetPasswordService(ctx context.Context, req ResetPasswordRequest) error {
+	return pgx.BeginFunc(ctx, db.Pool, func(tx pgx.Tx) error {
+		userID, err := dbUseResetToken(ctx, tx, auth.HashRefreshToken(req.Token))
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrResetTokenInvalid
+		}
+		if err != nil {
+			return err
+		}
+		// Hashed after the token check, so a bad token doesn't cost an argon2 run.
+		return dbSetPasswordAndRevokeTokens(ctx, tx, userID, auth.HashPassword(req.NewPassword))
+	})
+}
 
 // dummyHash is what login checks the password against when the email has no stored hash, so it does the same argon2
 // work as a wrong password. Built from HashPassword on first use, so it always matches the real cost settings.

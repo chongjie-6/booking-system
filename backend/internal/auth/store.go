@@ -19,6 +19,24 @@ func dbSetPasswordAndRevokeTokens(ctx context.Context, q db.Querier, userID stri
 	return err
 }
 
+// dbUseResetToken deletes an unexpired reset token, then the user's other reset tokens, so each emailed link works once
+// and a reset retires every older link. Takes a context, a Tx and the token hash; returns the user ID, or pgx.ErrNoRows
+// if the token is unknown, expired or used. The DELETE locks the row, so a concurrent reuse matches nothing.
+// ponytail: expired tokens that are never used stay in the table; prune them like the outbox if it ever grows.
+func dbUseResetToken(ctx context.Context, tx pgx.Tx, tokenHash string) (string, error) {
+	var userID string
+	err := tx.QueryRow(ctx, `
+	DELETE FROM password_reset_tokens
+	WHERE token_hash = @token_hash AND expires_at > now()
+	RETURNING user_id
+	`, pgx.NamedArgs{"token_hash": tokenHash}).Scan(&userID)
+	if err != nil {
+		return "", err
+	}
+	_, err = tx.Exec(ctx, `DELETE FROM password_reset_tokens WHERE user_id = @user_id`, pgx.NamedArgs{"user_id": userID})
+	return userID, err
+}
+
 // dbRevokeRefreshToken revokes a still-valid refresh token. Takes a context, a Pool or Tx, and the token hash; returns the old row,
 // or pgx.ErrNoRows if it was unknown, expired or already used. The UPDATE locks the row, so a concurrent reuse matches nothing.
 func dbRevokeRefreshToken(ctx context.Context, q db.Querier, tokenHash string) (RefreshTokenRow, error) {

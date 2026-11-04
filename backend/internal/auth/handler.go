@@ -144,6 +144,44 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 	response.Ok(w, nil, nil)
 }
 
+// ForgotPassword emails a reset link if the ForgotPasswordRequest email has an account.
+// Takes the request; responds 200 whether it does or not, so the response doesn't reveal which emails are registered, or 400/500.
+func ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	var req ForgotPasswordRequest
+	if err := response.Bind(r, &req); err != nil {
+		response.Error(w, err)
+		return
+	}
+	if err := ForgotPasswordService(r.Context(), req.Email); err != nil {
+		log.Printf("forgot password: %v", err)
+		response.Error(w, response.ErrInternalServerError)
+		return
+	}
+	response.Ok(w, nil, nil)
+}
+
+// ResetPassword sets a new password from a ResetPasswordRequest JSON body and signs out every session.
+// Takes the request; responds 200 and clears this browser's auth cookies, 400 if the link is invalid, expired or used, or 500.
+func ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var req ResetPasswordRequest
+	if err := response.Bind(r, &req); err != nil {
+		response.Error(w, err)
+		return
+	}
+	err := ResetPasswordService(r.Context(), req)
+	if errors.Is(err, ErrResetTokenInvalid) {
+		response.Error(w, response.NewError(http.StatusBadRequest, "this reset link is invalid or has expired. Request a new one"))
+		return
+	}
+	if err != nil {
+		log.Printf("reset password: %v", err)
+		response.Error(w, response.ErrInternalServerError)
+		return
+	}
+	clearAuthCookies(w)
+	response.Ok(w, nil, nil)
+}
+
 // Login signs the user in from a LoginRequest JSON body.
 // Takes the request; responds 200 with auth cookies, 400 if the body is invalid, 401 for a wrong email or password, or 500 on error.
 func Login(w http.ResponseWriter, r *http.Request) {
