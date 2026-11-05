@@ -48,13 +48,21 @@ func ResetPasswordService(ctx context.Context, req ResetPasswordRequest) error {
 			return err
 		}
 		// Hashed after the token check, so a bad token doesn't cost an argon2 run.
-		return dbSetPasswordAndRevokeTokens(ctx, tx, userID, auth.HashPassword(req.NewPassword))
+		hashed, err := auth.HashPassword(ctx, req.NewPassword)
+		if err != nil {
+			return err
+		}
+		return dbSetPasswordAndRevokeTokens(ctx, tx, userID, hashed)
 	})
 }
 
 // dummyHash is what login checks the password against when the email has no stored hash, so it does the same argon2
 // work as a wrong password. Built from HashPassword on first use, so it always matches the real cost settings.
-var dummyHash = sync.OnceValue(func() string { return auth.HashPassword(rand.Text()) })
+// Background never ends, so HashPassword waits for a slot and can't fail, and a failure is never cached.
+var dummyHash = sync.OnceValue(func() string {
+	h, _ := auth.HashPassword(context.Background(), rand.Text())
+	return h
+})
 
 // ChangePasswordService checks the current password, saves the new one, revokes all the user's refresh tokens
 // and issues fresh tokens for this client, in one transaction. Takes the request context, signed-in user, request and client;
@@ -67,17 +75,22 @@ func ChangePasswordService(ctx context.Context, u *auth.UserInfo, req ChangePass
 	if current.HashedPassword == nil {
 		return authTokens{}, ErrWrongPassword
 	}
-	err = auth.VerifyPassword(req.CurrentPassword, *current.HashedPassword)
+	err = auth.VerifyPassword(ctx, req.CurrentPassword, *current.HashedPassword)
 	if errors.Is(err, auth.ErrPasswordMismatch) {
 		return authTokens{}, ErrWrongPassword
 	}
 	if err != nil {
 		return authTokens{}, err
 	}
+	// Hashed before the transaction, so waiting for an argon2 slot doesn't hold a database connection.
+	hashed, err := auth.HashPassword(ctx, req.NewPassword)
+	if err != nil {
+		return authTokens{}, err
+	}
 
 	var tokens authTokens
 	err = pgx.BeginFunc(ctx, db.Pool, func(tx pgx.Tx) error {
-		if err := dbSetPasswordAndRevokeTokens(ctx, tx, u.UserID, auth.HashPassword(req.NewPassword)); err != nil {
+		if err := dbSetPasswordAndRevokeTokens(ctx, tx, u.UserID, hashed); err != nil {
 			return err
 		}
 		tokens, err = issueUserTokens(ctx, tx, u.UserID, current.UserRole, client)
@@ -155,7 +168,7 @@ func LoginUserService(ctx context.Context, loginRequest LoginRequest, client cli
 	if u.HashedPassword != nil {
 		hash = *u.HashedPassword
 	}
-	err = auth.VerifyPassword(loginRequest.Password, hash)
+	err = auth.VerifyPassword(ctx, loginRequest.Password, hash)
 	if u.HashedPassword == nil || errors.Is(err, auth.ErrPasswordMismatch) {
 		return authTokens{}, ErrInvalidCredentials
 	}

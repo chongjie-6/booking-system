@@ -13,7 +13,10 @@ var ErrEmailTaken = errors.New("email already registered")
 // CreateUserService hashes the password and stores a new user with the "user" role.
 // Takes a context and CreateUserRequest; returns the created User, or ErrEmailTaken if the email is already registered.
 func CreateUserService(ctx context.Context, req CreateUserRequest) (User, error) {
-	hashed := auth.HashPassword(req.Password)
+	hashed, err := auth.HashPassword(ctx, req.Password)
+	if err != nil {
+		return User{}, err
+	}
 
 	u, err := dbCreateUser(ctx, User{
 		UserRole:       "user",

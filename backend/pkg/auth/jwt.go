@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
@@ -10,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -108,9 +110,26 @@ func generateSalt(saltSize uint32) []byte {
 	return salt
 }
 
+// argonSlots caps how many argon2 hashes run at once. Each holds 64 MiB and up to 4 threads, so a burst of logins
+// queues here instead of running the server out of memory. One slot per CPU (GOMAXPROCS) keeps every core busy.
+var argonSlots = make(chan struct{}, runtime.GOMAXPROCS(0))
+
+// argonHash runs argon2.IDKey once a slot in argonSlots is free. Takes the request context and the argon2 inputs; returns the key,
+// or ctx.Err() if the context ends first (e.g. the client hung up), so abandoned requests leave the queue without hashing.
+func argonHash(ctx context.Context, password string, salt []byte, timeCost, memoryCost uint32, threads uint8, keyLen uint32) ([]byte, error) {
+	select {
+	case argonSlots <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	defer func() { <-argonSlots }()
+	return argon2.IDKey([]byte(password), salt, timeCost, memoryCost, threads, keyLen), nil
+}
+
 // HashPassword hashes a password with argon2id and a random salt; it's memory-hard, so leaked hashes are costly to crack.
-// Takes the plain password; returns the encoded "$argon2id$v=..$m=..,t=..,p=..$salt$hash" string.
-func HashPassword(password string) string {
+// Takes the request context and plain password; returns the encoded "$argon2id$v=..$m=..,t=..,p=..$salt$hash" string,
+// or ctx.Err() if the context ends while waiting for an argon2 slot.
+func HashPassword(ctx context.Context, password string) (string, error) {
 	argonConfig := &Argon2Configuration{
 		TimeCost:   2,
 		MemoryCost: 64 * 1024,
@@ -119,7 +138,10 @@ func HashPassword(password string) string {
 	}
 
 	salt := generateSalt(16)
-	hash := argon2.IDKey([]byte(password), salt, argonConfig.TimeCost, argonConfig.MemoryCost, argonConfig.Threads, argonConfig.KeyLength)
+	hash, err := argonHash(ctx, password, salt, argonConfig.TimeCost, argonConfig.MemoryCost, argonConfig.Threads, argonConfig.KeyLength)
+	if err != nil {
+		return "", err
+	}
 	encodedHash := fmt.Sprintf(
 		"$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version,
@@ -130,12 +152,13 @@ func HashPassword(password string) string {
 		base64.RawStdEncoding.EncodeToString(hash),
 	)
 
-	return encodedHash
+	return encodedHash, nil
 }
 
 // VerifyPassword re-hashes the password with the salt and settings stored in encodedHash and compares in constant time.
-// Takes the plain password and encoded hash; returns nil on a match, ErrPasswordMismatch if it differs, or an error if the hash is malformed.
-func VerifyPassword(password, encodedHash string) error {
+// Takes the request context, plain password and encoded hash; returns nil on a match, ErrPasswordMismatch if it differs,
+// ctx.Err() if the context ends while waiting for an argon2 slot, or an error if the hash is malformed.
+func VerifyPassword(ctx context.Context, password, encodedHash string) error {
 	parts := strings.Split(encodedHash, "$")
 	if len(parts) != 6 || parts[1] != "argon2id" {
 		return errors.New("invalid argon2id hash")
@@ -165,7 +188,10 @@ func VerifyPassword(password, encodedHash string) error {
 	}
 
 	// constant-time compare, so response time doesn't reveal how much of the hash matched
-	got := argon2.IDKey([]byte(password), salt, timeCost, memoryCost, threads, uint32(len(want)))
+	got, err := argonHash(ctx, password, salt, timeCost, memoryCost, threads, uint32(len(want)))
+	if err != nil {
+		return err
+	}
 	if subtle.ConstantTimeCompare(got, want) != 1 {
 		return ErrPasswordMismatch
 	}
