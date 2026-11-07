@@ -27,3 +27,8 @@ func Connect(ctx context.Context) {
 		log.Printf("redis unreachable, rate limiting disabled until it connects: %v", err)
 	}
 }
+
+// AcquireLock tries to set a key with a TTL, returning true if it was set and false if it already exists. Takes a context, key and TTL; returns the set result and any error.
+func AcquireLock(ctx context.Context, key string, ttl time.Duration) (bool, error) {
+	return Client.SetNX(ctx, key, "1", ttl).Result() // try to set the key with a TTL
+}
