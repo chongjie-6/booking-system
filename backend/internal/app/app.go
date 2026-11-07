@@ -41,7 +41,7 @@ func Middleware(h http.Handler) http.Handler {
 	return middleware.Logger(h)
 }
 
-// Serve starts the outbox relay and notification consumer and serves r until Ctrl+C or SIGTERM, then shuts down gracefully.
+// Serve starts the outbox relay, outbox pruner and notification consumer and serves r until Ctrl+C or SIGTERM, then shuts down gracefully.
 // Takes a parent context and the handler; returns once shutdown has finished.
 func Serve(ctx context.Context, h http.Handler) {
 	sig, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
@@ -49,7 +49,12 @@ func Serve(ctx context.Context, h http.Handler) {
 
 	// Consumers stop on sig; shutdown waits for them so their last batch is handled and committed before exiting.
 	var consumers sync.WaitGroup
-	consumers.Go(func() { outbox.Relay(sig) })
+	if mq.Client != nil {
+		consumers.Go(func() { outbox.Relay(sig) })
+		consumers.Go(func() { outbox.Prune(sig) })
+	} else {
+		log.Print("outbox relay: no kafka client, events stay queued until restart")
+	}
 	consumers.Go(func() { notification.Consume(sig) })
 
 	srv := &http.Server{Addr: ":" + cmp.Or(os.Getenv("PORT"), "8080"), Handler: h}

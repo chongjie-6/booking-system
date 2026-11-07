@@ -3,6 +3,7 @@ package outbox
 import (
 	"booking-system/pkg/db"
 	"booking-system/pkg/mq"
+	"booking-system/pkg/rdb"
 	"context"
 	"log"
 	"time"
@@ -13,17 +14,11 @@ import (
 
 const batchSize = 100
 
-// Relay sends unsent outbox rows to Kafka, oldest first, until ctx is cancelled, and hourly deletes rows sent over a week ago.
+// Relay sends unsent outbox rows to Kafka, oldest first, until ctx is cancelled.
 // Run it in its own goroutine and wait for it before closing the producer. Returns nothing, logging failures.
 func Relay(ctx context.Context) {
-	if mq.Client == nil {
-		log.Print("outbox relay: no kafka client, events stay queued until restart")
-		return
-	}
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
-	prune := time.NewTicker(time.Hour)
-	defer prune.Stop()
 	failing := false
 	for {
 		n, err := relayBatch()
@@ -41,10 +36,27 @@ func Relay(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-tick.C:
-		case <-prune.C:
-			if err := dbPrunePublished(); err != nil {
-				log.Printf("outbox prune: %v", err)
-			}
+		}
+	}
+}
+
+// Prune hourly deletes rows sent over a week ago until ctx is cancelled. The Redis lock means one instance prunes per hour;
+// if Redis is down every instance prunes, which is safe since the delete is idempotent.
+func Prune(ctx context.Context) {
+	tick := time.NewTicker(time.Hour)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+		// The TTL is shorter than the interval so it has expired by the next tick, and is never released, so other instances skip this hour.
+		if ok, err := rdb.AcquireLock(ctx, "outbox:prune", 50*time.Minute); err == nil && !ok {
+			continue
+		}
+		if err := dbPrunePublished(); err != nil {
+			log.Printf("outbox prune: %v", err)
 		}
 	}
 }
