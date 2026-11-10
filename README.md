@@ -30,11 +30,14 @@ Settings come from environment variables, or from `backend/.env` (gitignored), w
 | `GEOIP_DB_PATH` | no | See [IP country database](#ip-country-database) |
 | `RESEND_API_KEY`, `EMAIL_FROM` | no | [Resend](https://resend.com) key and sender for login alerts and password reset emails; without them no emails are sent |
 
-`docker-compose.yml` runs Postgres 18, Redis and Kafka locally; its header lists the matching settings. If you already run one of them, start only the others, e.g. `docker compose up -d redis kafka`:
+`docker-compose.yml` runs Postgres 18, Redis, Kafka and Kafka Connect (Debezium) locally; its header lists the matching settings. If you already run one of them, start only the others, e.g. `docker compose up -d redis kafka connect`. Then register the outbox connector, which sends outbox rows to Kafka (safe to re-run; the backend's migrations must have run once so the `outbox` table exists):
 
 ```sh
 docker compose up -d
+curl -X PUT -H "Content-Type: application/json" --data @debezium/outbox.json localhost:8083/connectors/outbox/config
 ```
+
+Postgres needs `wal_level=logical` for Debezium, which the compose file sets.
 
 Generate a JWT key (Git Bash) with `openssl ecparam -name prime256v1 -genkey -noout`, and paste it into `.env` in double quotes so the line breaks are kept:
 

@@ -35,7 +35,7 @@ var templateFS embed.FS
 // html/template escapes every value, so attacker-controlled input like the user agent can't inject markup or links into the email.
 var templates = template.Must(template.ParseFS(templateFS, "templates/*.html"))
 
-// SendSuspiciousActivityNotification saves an alert event to the outbox for the relay to send.
+// SendSuspiciousActivityNotification saves an alert event to the outbox for Debezium to send to Kafka.
 // Logs and drops it if the insert fails, so a database error never fails the login.
 func SendSuspiciousActivityNotification(ctx context.Context, userID string, ip string, userAgent string) {
 	e := event{Type: suspiciousActivity, UserID: userID, IP: ip, UserAgent: userAgent}
@@ -44,7 +44,7 @@ func SendSuspiciousActivityNotification(ctx context.Context, userID string, ip s
 	}
 }
 
-// SendPasswordResetNotification saves a password reset event to the outbox for the relay to send.
+// SendPasswordResetNotification saves a password reset event to the outbox for Debezium to send to Kafka.
 // Takes a context and user ID; returns the insert error, if any.
 func SendPasswordResetNotification(ctx context.Context, userID string) error {
 	return outbox.Enqueue(ctx, db.Pool, mq.NotificationsTopic, userID, event{Type: passwordReset, UserID: userID})

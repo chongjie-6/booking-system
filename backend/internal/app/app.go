@@ -41,20 +41,15 @@ func Middleware(h http.Handler) http.Handler {
 	return middleware.Logger(h)
 }
 
-// Serve starts the outbox relay, outbox pruner and notification consumer and serves r until Ctrl+C or SIGTERM, then shuts down gracefully.
-// Takes a parent context and the handler; returns once shutdown has finished.
+// Serve starts the outbox pruner and notification consumer and serves r until Ctrl+C or SIGTERM, then shuts down gracefully.
+// Outbox events are sent to Kafka by Debezium, not by this process. Takes a parent context and the handler; returns once shutdown has finished.
 func Serve(ctx context.Context, h http.Handler) {
 	sig, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	// Consumers stop on sig; shutdown waits for them so their last batch is handled and committed before exiting.
 	var consumers sync.WaitGroup
-	if mq.Client != nil {
-		consumers.Go(func() { outbox.Relay(sig) })
-		consumers.Go(func() { outbox.Prune(sig) })
-	} else {
-		log.Print("outbox relay: no kafka client, events stay queued until restart")
-	}
+	consumers.Go(func() { outbox.Prune(sig) })
 	consumers.Go(func() { notification.Consume(sig) })
 
 	srv := &http.Server{Addr: ":" + cmp.Or(os.Getenv("PORT"), "8080"), Handler: h}
