@@ -11,6 +11,7 @@
   "publication.autocreate.mode": "filtered",
   "snapshot.mode": "no_data",
   "tombstones.on.delete": "false",
+  "heartbeat.interval.ms": "10000",
 
   "transforms": "outbox",
   "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter",
