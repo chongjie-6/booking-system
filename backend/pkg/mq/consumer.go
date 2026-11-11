@@ -17,9 +17,11 @@ import (
 // retries is how many times a failed event is retried, each from its own topic, before it's dead-lettered.
 const retries = 3
 
-// backoff is how long retry-1 waits before trying an event again; each later retry waits twice as long (0.5s, 1s, 2s),
-// plus up to 50% random jitter.
-var backoff = 500 * time.Millisecond
+// backoff is how long retry-1 waits before trying an event again; each later retry waits backoffFactor times as long
+// (1s, 10s, 100s), plus up to 50% random jitter.
+var backoff = time.Second
+
+const backoffFactor = 10
 
 // Handler handles one event, given its raw JSON to decode. A returned error sends it through the retry topics, then dead-letters it.
 type Handler func(ctx context.Context, event []byte) error
@@ -43,7 +45,7 @@ func newConsumer(group string, topic string, handlers map[string]Handler) consum
 }
 
 // Consume runs the handler matching each event's "type" field for every event on topic, until ctx is cancelled.
-// Run it in its own goroutine, and wait for it to return before exiting. It finishes the batches in hand, then commits.
+// Run it in its own goroutine, and wait for it to return before exiting. It finishes the events in hand, then commits.
 // Takes the shutdown context, the consumer group (one per service, shared by all its instances so each event is handled
 // once), the topic, and a handler per event type; returns nothing, logging failures.
 // A failed event moves to retry-1, retry-2, retry-3, then the dead-letter topic. Each retry topic has its own consumer
@@ -52,8 +54,8 @@ func Consume(ctx context.Context, group string, topic string, handlers map[strin
 	c := newConsumer(group, topic, handlers)
 	var wg sync.WaitGroup
 	wg.Go(func() { poll(ctx, group, topic, func(r *kgo.Record) { c.handle(r, 0) }) })
-	for n := 1; n <= retries; n++ {
-		delay := backoff << (n - 1)
+	// n and delay are fresh variables each iteration, so every goroutine keeps its own.
+	for n, delay := 1, backoff; n <= retries; n, delay = n+1, delay*backoffFactor {
 		wg.Go(func() {
 			poll(ctx, fmt.Sprintf("%s.retry-%d", group, n), c.retry[n-1], func(r *kgo.Record) {
 				// Up to +50% jitter, so a burst of events that failed together (e.g. a dependency outage) doesn't retry
@@ -72,19 +74,21 @@ func Consume(ctx context.Context, group string, topic string, handlers map[strin
 
 // poll runs each on every record of topic, read as group, until ctx is cancelled. Takes the shutdown context, the group,
 // the topic and the per-record func; returns nothing, logging failures.
-// franz-go commits a poll's offsets once the next poll starts, so an event cut off by a crash is handled again on restart.
+// Each record is marked once handled, and only marked records are committed (every 5s and on Close), so an event cut
+// off by a crash or left unhandled at shutdown is read again on restart.
 func poll(ctx context.Context, group string, topic string, each func(*kgo.Record)) {
 	cl, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.AllowAutoTopicCreation(),
 		kgo.ConsumerGroup(group),
 		kgo.ConsumeTopics(topic),
+		kgo.AutoCommitMarks(),
 	)
 	if err != nil {
 		log.Printf("kafka consumer %s: %v", group, err)
 		return
 	}
-	defer cl.Close() // leaves the group and commits everything polled, which the loop has handled by then
+	defer cl.Close() // leaves the group and commits the marked records
 
 	for {
 		fetches := cl.PollFetches(ctx)
@@ -96,8 +100,13 @@ func poll(ctx context.Context, group string, topic string, each func(*kgo.Record
 				log.Printf("kafka consumer %s: %s/%d: %v", group, t, p, err)
 			}
 		})
-		// Handle whatever this poll returned even when shutting down: Close commits it, so skipping it would lose it.
-		fetches.EachRecord(each)
+		fetches.EachRecord(func(r *kgo.Record) {
+			if ctx.Err() != nil {
+				return // shutting down: left unmarked, so it's read again on the next start
+			}
+			each(r)
+			cl.MarkCommitRecords(r)
+		})
 		if ctx.Err() != nil {
 			return
 		}

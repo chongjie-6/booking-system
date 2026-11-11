@@ -47,7 +47,7 @@ func Serve(ctx context.Context, h http.Handler) {
 	sig, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Consumers stop on sig; shutdown waits for them so their last batch is handled and committed before exiting.
+	// Consumers stop on sig; shutdown waits for them so the event each has in hand is handled and committed before exiting.
 	var consumers sync.WaitGroup
 	consumers.Go(func() { outbox.Prune(sig) })
 	consumers.Go(func() { notification.Consume(sig) })
