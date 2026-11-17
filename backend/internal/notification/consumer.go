@@ -11,5 +11,6 @@ func Consume(ctx context.Context) {
 	mq.Consume(ctx, "notification", mq.NotificationsTopic, map[string]mq.Handler{
 		suspiciousActivity: sendSuspiciousActivityEmail,
 		passwordReset:      sendPasswordResetEmail,
+		bookingConfirmed:   sendBookingConfirmedEmail,
 	})
 }

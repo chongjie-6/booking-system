@@ -11,6 +11,7 @@ import (
 	"crypto/rand"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"log"
 	"os"
@@ -21,6 +22,7 @@ import (
 const (
 	suspiciousActivity = "suspiciousActivity"
 	passwordReset      = "passwordReset"
+	bookingConfirmed   = "bookingConfirmed"
 )
 
 // resetTTL is how long a password reset link works, counted from when the email is sent.
@@ -48,6 +50,39 @@ func SendSuspiciousActivityNotification(ctx context.Context, userID string, ip s
 // Takes a context and user ID; returns the insert error, if any.
 func SendPasswordResetNotification(ctx context.Context, userID string) error {
 	return outbox.Enqueue(ctx, db.Pool, mq.NotificationsTopic, userID, event{Type: passwordReset, UserID: userID})
+}
+
+// SendBookingConfirmedNotification saves a booking confirmation event to the outbox. Pass the booking's transaction so the
+// email is only sent if the booking commits. Takes a context, querier, user ID, booking ID and its reference; returns the insert error.
+func SendBookingConfirmedNotification(ctx context.Context, q db.Querier, userID, bookingID, ref string) error {
+	return outbox.Enqueue(ctx, q, mq.NotificationsTopic, userID, event{Type: bookingConfirmed, UserID: userID, BookingID: bookingID, Ref: ref})
+}
+
+// sendBookingConfirmedEmail emails the user their tickets: film, time, screen, seats, total and reference.
+// Takes a context and the event's JSON; returns the decode, lookup, template or send error.
+func sendBookingConfirmedEmail(ctx context.Context, b []byte) error {
+	var e event
+	if err := json.Unmarshal(b, &e); err != nil {
+		return err
+	}
+	u, err := user.GetUserService(ctx, e.UserID)
+	if err != nil {
+		return err
+	}
+	t, err := dbGetTicket(ctx, e.BookingID)
+	if err != nil {
+		return err
+	}
+	data := struct {
+		FirstName, Ref string
+		ticket
+		Total string
+	}{u.FirstName, e.Ref, t, fmt.Sprintf("$%d.%02d", t.TotalCents/100, t.TotalCents%100)}
+	var body strings.Builder
+	if err := templates.ExecuteTemplate(&body, "booking_confirmed.html", data); err != nil {
+		return err
+	}
+	return email.Send(ctx, u.Email, "Your tickets for "+t.Title, body.String())
 }
 
 // sendPasswordResetEmail makes a reset token and emails the user a link to the frontend with it.

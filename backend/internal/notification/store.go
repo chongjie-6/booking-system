@@ -16,3 +16,34 @@ func dbInsertResetToken(ctx context.Context, tokenHash string, userID string, ex
 	`, pgx.NamedArgs{"token_hash": tokenHash, "user_id": userID, "expires_at": expiresAt})
 	return err
 }
+
+// ticket is what a booking confirmation email shows. When is in the cinema's time zone, e.g. "Tue 18 Nov, 7:00 pm".
+type ticket struct {
+	Title      string
+	When       string
+	Room       string
+	Seats      string // e.g. "C4, C5"
+	TotalCents int
+}
+
+// dbGetTicket fetches a booking's film, time, screen, seats and total. Takes a context and booking ID; returns the ticket or the database error.
+// ponytail: the cinema's time zone is fixed to Sydney, like the dev seed; store it on rooms if cinemas in other zones join.
+func dbGetTicket(ctx context.Context, bookingID string) (ticket, error) {
+	var t ticket
+	err := db.Pool.QueryRow(ctx, `
+	SELECT m.title,
+	to_char(e.starts_at AT TIME ZONE 'Australia/Sydney', 'Dy FMDD Mon, FMHH12:MI am'),
+	r.name,
+	string_agg(s.row_label || s.seat_number, ', ' ORDER BY s.row_label, s.seat_number),
+	e.price_cents * count(*)
+	FROM bookings b
+	JOIN events e ON e.event_id = b.event_id
+	JOIN movies m ON m.movie_id = e.movie_id
+	JOIN rooms r ON r.room_id = e.room_id
+	JOIN booking_seats bs ON bs.booking_id = b.booking_id
+	JOIN seats s ON s.seat_id = bs.seat_id
+	WHERE b.booking_id = @booking_id
+	GROUP BY m.title, e.starts_at, r.name, e.price_cents
+	`, pgx.NamedArgs{"booking_id": bookingID}).Scan(&t.Title, &t.When, &t.Room, &t.Seats, &t.TotalCents)
+	return t, err
+}

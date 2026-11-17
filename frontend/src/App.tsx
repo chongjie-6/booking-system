@@ -31,8 +31,6 @@ export default function App() {
   const [view, setView] = useState<View>(resetToken ? { step: 'signin', resetToken } : { step: 'films' })
   const [day, setDay] = useState(0)
   const [seats, setSeats] = useState<Seat[]>([])
-  // seat IDs booked in this tab, per showing
-  const [booked, setBooked] = useState<Record<string, string[]>>({})
   // undefined while the first lookup runs, null when signed out
   const [user, setUser] = useState<User | null>()
 
@@ -52,13 +50,9 @@ export default function App() {
     )
   }
 
-  // ponytail: bookings stay in memory until the booking endpoints exist
-  function confirm(showtime: Showtime, user: User) {
-    const ref = crypto.randomUUID().slice(0, 6).toUpperCase()
-    const booking = { ref, name: user.firstName, email: user.email, showtime, seats }
-    setBooked({ ...booked, [showtime.id]: [...(booked[showtime.id] ?? []), ...seats.map((s) => s.seatID)] })
+  function booked(showtime: Showtime, user: User, ref: string) {
+    go({ step: 'done', booking: { ref, name: user.firstName, email: user.email, showtime, seats } })
     setSeats([])
-    go({ step: 'done', booking })
   }
 
   return (
@@ -110,7 +104,6 @@ export default function App() {
       {view.step === 'seats' && (
         <SeatPicker
           showtime={view.showtime}
-          booked={booked[view.showtime.id] ?? []}
           seats={seats}
           onSeats={setSeats}
           onBack={() => go({ step: 'films' })}
@@ -124,7 +117,7 @@ export default function App() {
           user={user}
           onSignedIn={setUser}
           onBack={() => go({ step: 'seats', showtime: view.showtime })}
-          onConfirm={(u) => confirm(view.showtime, u)}
+          onBooked={(u, ref) => booked(view.showtime, u, ref)}
         />
       )}
       {view.step === 'done' && <Done booking={view.booking} onAgain={() => go({ step: 'films' })} />}
@@ -203,14 +196,12 @@ function Films({ day, onDay, onPick }: { day: number; onDay: (i: number) => void
 
 function SeatPicker({
   showtime,
-  booked,
   seats,
   onSeats,
   onBack,
   onContinue,
 }: {
   showtime: Showtime
-  booked: string[]
   seats: Seat[]
   onSeats: Dispatch<SetStateAction<Seat[]>>
   onBack: () => void
@@ -221,8 +212,13 @@ function SeatPicker({
   const atMax = seats.length >= MAX_SEATS
 
   useEffect(() => {
-    api<Seat[]>(`/events/${showtime.id}/seats`).then(setAll, () => setAll(null))
-  }, [showtime.id])
+    api<Seat[]>(`/events/${showtime.id}/seats`).then((all) => {
+      setAll(all)
+      // Drop chosen seats someone else has taken since, e.g. when coming back from a failed checkout.
+      const taken = new Set(all.filter((s) => s.taken).map((s) => s.seatID))
+      onSeats((seats) => seats.filter((s) => !taken.has(s.seatID)))
+    }, () => setAll(null))
+  }, [showtime.id, onSeats])
 
   // The API sends seats ordered by row then number.
   const rows: Seat[][] = []
@@ -266,7 +262,7 @@ function SeatPicker({
                 {row[0].row}
               </span>
               {row.map((seat) => {
-                const isTaken = seat.taken || booked.includes(seat.seatID)
+                const isTaken = seat.taken
                 const selected = seats.some((s) => s.seatID === seat.seatID)
                 return (
                   <button
@@ -325,18 +321,49 @@ function Checkout({
   user,
   onSignedIn,
   onBack,
-  onConfirm,
+  onBooked,
 }: {
   showtime: Showtime
   seats: Seat[]
   user: User | null | undefined
   onSignedIn: (u: User) => void
   onBack: () => void
-  onConfirm: (u: User) => void
+  onBooked: (u: User, ref: string) => void
 }) {
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const path = `/events/${showtime.id}`
+  const body = { seatIDs: seats.map((s) => s.seatID) }
+
+  // Hold the seats while the user checks out, once they're signed in.
+  useEffect(() => {
+    if (!user) return
+    const seatIDs = seats.map((s) => s.seatID)
+    api(`/events/${showtime.id}/hold`, { method: 'PUT', body: { seatIDs } }).catch((e) => setError(e.message))
+  }, [user, showtime.id, seats])
+
+  // Release the holds before going back, so the seat map doesn't show the user's own seats as taken.
+  function back() {
+    if (!user) return onBack()
+    setBusy(true)
+    api(`${path}/hold`, { method: 'DELETE', body }).finally(onBack).catch(() => {})
+  }
+
+  async function confirm(u: User) {
+    setBusy(true)
+    setError('')
+    try {
+      const { ref } = await api<{ ref: string }>(`${path}/bookings`, { method: 'POST', body })
+      onBooked(u, ref)
+    } catch (err) {
+      setError((err as Error).message)
+      setBusy(false)
+    }
+  }
+
   return (
     <main>
-      <button className="back" onClick={onBack}>
+      <button className="back" onClick={back} disabled={busy}>
         Change seats
       </button>
       <h1>Confirm your booking</h1>
@@ -346,7 +373,12 @@ function Checkout({
             <p>
               Booking as {user.firstName} {user.lastName}. We'll send your tickets to {user.email}.
             </p>
-            <button className="primary" onClick={() => onConfirm(user)}>
+            {error && (
+              <p className="error" role="alert">
+                {error}
+              </p>
+            )}
+            <button className="primary" onClick={() => confirm(user)} disabled={busy || !!error}>
               Confirm booking
             </button>
           </div>

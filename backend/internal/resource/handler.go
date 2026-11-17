@@ -1,6 +1,7 @@
 package resource
 
 import (
+	"booking-system/internal/booking"
 	"booking-system/pkg/response"
 	"errors"
 	"net/http"
@@ -33,6 +34,15 @@ func ListSeats(w http.ResponseWriter, r *http.Request) {
 	if len(seats) == 0 {
 		response.Error(w, response.ErrNotFound)
 		return
+	}
+	// Seats someone is checking out with show as taken. that includes the viewer's own holds; the frontend
+	// releases them before going back to the seat map, so look up the viewer here only if that stops being enough.
+	ids := make([]string, len(seats))
+	for i, s := range seats {
+		ids[i] = s.SeatID
+	}
+	for i, h := range booking.Holders(r.Context(), r.PathValue("id"), ids) {
+		seats[i].Taken = seats[i].Taken || h != ""
 	}
 	response.Ok(w, seats, nil)
 }

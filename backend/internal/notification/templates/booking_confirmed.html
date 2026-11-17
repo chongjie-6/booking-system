@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:24px;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#18181b;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;">
+    <tr>
+      <td style="padding:32px;">
+        <h1 style="margin:0 0 16px;font-size:20px;">Your tickets for {{.Title}}</h1>
+        <p style="margin:0 0 24px;line-height:1.5;">Hi {{.FirstName}}, your booking is confirmed. Show this reference at the door.</p>
+        <p style="margin:0 0 24px;font-size:28px;font-weight:bold;letter-spacing:4px;font-family:'Courier New',monospace;">{{.Ref}}</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" style="line-height:1.8;">
+          <tr><td style="padding-right:24px;color:#71717a;">When</td><td>{{.When}}</td></tr>
+          <tr><td style="padding-right:24px;color:#71717a;">Where</td><td>{{.Room}}</td></tr>
+          <tr><td style="padding-right:24px;color:#71717a;">Seats</td><td>{{.Seats}}</td></tr>
+          <tr><td style="padding-right:24px;color:#71717a;">Total</td><td>{{.Total}}</td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

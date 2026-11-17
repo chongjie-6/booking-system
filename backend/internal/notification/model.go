@@ -6,4 +6,6 @@ type event struct {
 	UserID    string `json:"userID"`
 	IP        string `json:"ip"`
 	UserAgent string `json:"userAgent"`
+	BookingID string `json:"bookingID"`
+	Ref       string `json:"ref"`
 }
