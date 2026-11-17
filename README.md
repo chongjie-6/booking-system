@@ -45,6 +45,12 @@ For films to book, load the dev seed once the migrations have run: 5 films, 3 sc
 docker compose exec -T postgres psql -U booking -d booking < backend/seed.sql
 ```
 
+PowerShell has no `<` redirection, so pipe the file in instead:
+
+```powershell
+Get-Content backend/seed.sql -Raw | docker compose exec -T postgres psql -U booking -d booking
+```
+
 Generate a JWT key (Git Bash) with `openssl ecparam -name prime256v1 -genkey -noout`, and paste it into `.env` in double quotes so the line breaks are kept:
 
 ```sh
