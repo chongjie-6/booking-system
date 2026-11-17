@@ -39,6 +39,12 @@ curl -X PUT -H "Content-Type: application/json" --data @debezium/outbox.json loc
 
 Postgres needs `wal_level=logical` for Debezium, which the compose file sets.
 
+For films to book, load the dev seed once the migrations have run: 5 films, 3 screens and a week of showings from today. It wipes all movies, rooms, showings and bookings first, so re-run it to move the showings forward (Git Bash):
+
+```sh
+docker compose exec -T postgres psql -U booking -d booking < backend/seed.sql
+```
+
 Generate a JWT key (Git Bash) with `openssl ecparam -name prime256v1 -genkey -noout`, and paste it into `.env` in double quotes so the line breaks are kept:
 
 ```sh
