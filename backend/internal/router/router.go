@@ -4,7 +4,6 @@ package router
 import (
 	"booking-system/internal/auth"
 	"booking-system/internal/booking"
-	"booking-system/internal/notification"
 	"booking-system/internal/payment"
 	"booking-system/internal/resource"
 	"booking-system/internal/user"
@@ -17,6 +16,5 @@ func New(r *http.ServeMux) {
 	booking.Routes(r)
 	resource.Routes(r)
 	payment.Routes(r)
-	notification.Routes(r)
 	auth.Routes(r)
 }
