@@ -26,23 +26,23 @@ var (
 	ErrResetTokenInvalid  = errors.New("reset token is unknown, expired or used")
 )
 
-// PruneResetTokens hourly deletes expired password reset tokens until ctx is cancelled, like outbox.Prune.
-// The Redis lock means one instance prunes per hour; if Redis is down every instance prunes, which is safe since the delete is idempotent.
-func PruneResetTokens(ctx context.Context) {
-	tick := time.NewTicker(time.Hour * 24)
+// PruneTokens deletes expired reset tokens and long-expired refresh tokens at startup and then daily until ctx is cancelled.
+// Running at startup means a deploy more often than daily can't stop it ever running. The Redis lock means one instance
+// prunes per day; if Redis is down every instance prunes, which is safe since the delete is idempotent.
+func PruneTokens(ctx context.Context) {
+	tick := time.NewTicker(24 * time.Hour)
 	defer tick.Stop()
 	for {
+		// The TTL is shorter than the interval so it has expired by the next tick, and is never released, so other instances skip this day.
+		if ok, err := rdb.AcquireLock(ctx, "tokens:prune", 23*time.Hour); err != nil || ok {
+			if err := dbPruneTokens(); err != nil {
+				log.Printf("token prune: %v", err)
+			}
+		}
 		select {
 		case <-ctx.Done():
 			return
 		case <-tick.C:
-		}
-		// The TTL is shorter than the interval so it has expired by the next tick, and is never released, so other instances skip this hour.
-		if ok, err := rdb.AcquireLock(ctx, "reset_tokens:prune", 50*time.Minute); err == nil && !ok {
-			continue
-		}
-		if err := dbPruneResetTokens(); err != nil {
-			log.Printf("reset token prune: %v", err)
 		}
 	}
 }

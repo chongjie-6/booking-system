@@ -42,7 +42,7 @@ func Middleware(h http.Handler) http.Handler {
 	return middleware.Logger(h)
 }
 
-// Serve starts the outbox and reset token pruners and the notification consumer and serves r until Ctrl+C or SIGTERM, then shuts down gracefully.
+// Serve starts the outbox and token pruners and the notification consumer and serves r until Ctrl+C or SIGTERM, then shuts down gracefully.
 // Outbox events are sent to Kafka by Debezium, not by this process. Takes a parent context and the handler; returns once shutdown has finished.
 func Serve(ctx context.Context, h http.Handler) {
 	sig, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
@@ -51,7 +51,7 @@ func Serve(ctx context.Context, h http.Handler) {
 	// Consumers stop on sig; shutdown waits for them so the event each has in hand is handled and committed before exiting.
 	var consumers sync.WaitGroup
 	consumers.Go(func() { outbox.Prune(sig) })
-	consumers.Go(func() { auth.PruneResetTokens(sig) })
+	consumers.Go(func() { auth.PruneTokens(sig) })
 	consumers.Go(func() { notification.Consume(sig) })
 
 	srv := &http.Server{Addr: ":" + cmp.Or(os.Getenv("PORT"), "8080"), Handler: h}

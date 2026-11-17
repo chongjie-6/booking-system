@@ -23,7 +23,7 @@ func dbSetPasswordAndRevokeTokens(ctx context.Context, q db.Querier, userID stri
 // dbUseResetToken deletes an unexpired reset token, then the user's other reset tokens, so each emailed link works once
 // and a reset retires every older link. Takes a context, a Tx and the token hash; returns the user ID, or pgx.ErrNoRows
 // if the token is unknown, expired or used. The DELETE locks the row, so a concurrent reuse matches nothing.
-// Expired tokens that are never used are deleted by PruneResetTokens.
+// Expired tokens that are never used are deleted by PruneTokens.
 func dbUseResetToken(ctx context.Context, tx pgx.Tx, tokenHash string) (string, error) {
 	var userID string
 	err := tx.QueryRow(ctx, `
@@ -38,11 +38,16 @@ func dbUseResetToken(ctx context.Context, tx pgx.Tx, tokenHash string) (string, 
 	return userID, err
 }
 
-// dbPruneResetTokens deletes expired reset tokens, which no link can use any more, so the table doesn't grow forever.
-func dbPruneResetTokens() error {
+// dbPruneTokens deletes expired reset tokens, which no link can use any more, and refresh tokens that expired over 30 days ago,
+// so neither table grows forever. Refresh tokens are kept a month past expiry because dbGetSeenIPs and dbHasDevice read them:
+// a user back within a month of their last session still counts as a known IP and device.
+func dbPruneTokens() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	_, err := db.Pool.Exec(ctx, `DELETE FROM password_reset_tokens WHERE expires_at < now()`)
+	if _, err := db.Pool.Exec(ctx, `DELETE FROM password_reset_tokens WHERE expires_at < now()`); err != nil {
+		return err
+	}
+	_, err := db.Pool.Exec(ctx, `DELETE FROM refresh_tokens WHERE expires_at < now() - interval '30 days'`)
 	return err
 }
 
