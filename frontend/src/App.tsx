@@ -1,20 +1,18 @@
-import { Fragment, useEffect, useState, type CSSProperties, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useState, type CSSProperties, type Dispatch, type SetStateAction } from 'react'
 import { api, type User } from './api'
 import { Auth } from './Auth'
 import {
-  AISLES_AFTER,
   MAX_SEATS,
-  MOVIES,
-  PRICE,
-  ROWS,
-  SEATS_PER_ROW,
   formatDay,
   formatTime,
-  money,
+  hue,
+  seatLabel,
   showtimesFor,
-  takenSeats,
+  total,
   upcomingDays,
   type Booking,
+  type Movie,
+  type Seat,
   type Showtime,
 } from './data'
 
@@ -32,7 +30,8 @@ if (resetToken) history.replaceState(null, '', location.pathname + location.sear
 export default function App() {
   const [view, setView] = useState<View>(resetToken ? { step: 'signin', resetToken } : { step: 'films' })
   const [day, setDay] = useState(0)
-  const [seats, setSeats] = useState<string[]>([])
+  const [seats, setSeats] = useState<Seat[]>([])
+  // seat IDs booked in this tab, per showing
   const [booked, setBooked] = useState<Record<string, string[]>>({})
   // undefined while the first lookup runs, null when signed out
   const [user, setUser] = useState<User | null>()
@@ -57,7 +56,7 @@ export default function App() {
   function confirm(showtime: Showtime, user: User) {
     const ref = crypto.randomUUID().slice(0, 6).toUpperCase()
     const booking = { ref, name: user.firstName, email: user.email, showtime, seats }
-    setBooked({ ...booked, [showtime.id]: [...(booked[showtime.id] ?? []), ...seats] })
+    setBooked({ ...booked, [showtime.id]: [...(booked[showtime.id] ?? []), ...seats.map((s) => s.seatID)] })
     setSeats([])
     go({ step: 'done', booking })
   }
@@ -140,10 +139,22 @@ export default function App() {
 function Films({ day, onDay, onPick }: { day: number; onDay: (i: number) => void; onPick: (s: Showtime) => void }) {
   const days = upcomingDays()
   const now = new Date()
+  // undefined while loading, null if it failed
+  const [movies, setMovies] = useState<Movie[] | null>()
+
+  useEffect(() => {
+    api<Movie[]>('/movies').then(setMovies, () => setMovies(null))
+  }, [])
 
   return (
     <main>
       <h1>Now showing</h1>
+      {movies === null && (
+        <p className="error" role="alert">
+          Couldn't load the films. Please refresh to try again.
+        </p>
+      )}
+      {movies?.length === 0 && <p className="none">Nothing is showing in the next few days.</p>}
       <nav className="days" aria-label="Day">
         {days.map((d, i) => (
           <button key={i} aria-pressed={i === day} onClick={() => onDay(i)}>
@@ -153,11 +164,11 @@ function Films({ day, onDay, onPick }: { day: number; onDay: (i: number) => void
       </nav>
 
       <ul className="listing">
-        {MOVIES.map((movie) => {
+        {movies?.map((movie) => {
           const sessions = showtimesFor(movie, days[day]).filter((s) => s.start > now)
           return (
-            <li key={movie.id} className="film">
-              <div className="poster" style={{ '--hue': movie.hue } as CSSProperties} aria-hidden="true">
+            <li key={movie.movieID} className="film">
+              <div className="poster" style={{ '--hue': hue(movie.movieID) } as CSSProperties} aria-hidden="true">
                 <span>{movie.title}</span>
               </div>
               <div>
@@ -165,7 +176,7 @@ function Films({ day, onDay, onPick }: { day: number; onDay: (i: number) => void
                 <p className="meta">
                   <span>{movie.genre}</span>
                   <span>
-                    {Math.floor(movie.runtime / 60)}h {movie.runtime % 60}m
+                    {Math.floor(movie.runtimeMinutes / 60)}h {movie.runtimeMinutes % 60}m
                   </span>
                   <span className="rating">{movie.rating}</span>
                 </p>
@@ -200,19 +211,31 @@ function SeatPicker({
 }: {
   showtime: Showtime
   booked: string[]
-  seats: string[]
-  onSeats: Dispatch<SetStateAction<string[]>>
+  seats: Seat[]
+  onSeats: Dispatch<SetStateAction<Seat[]>>
   onBack: () => void
   onContinue: () => void
 }) {
-  const taken = new Set([...takenSeats(showtime.id), ...booked])
+  // undefined while loading, null if it failed
+  const [all, setAll] = useState<Seat[] | null>()
   const atMax = seats.length >= MAX_SEATS
 
-  function toggle(seat: string) {
+  useEffect(() => {
+    api<Seat[]>(`/events/${showtime.id}/seats`).then(setAll, () => setAll(null))
+  }, [showtime.id])
+
+  // The API sends seats ordered by row then number.
+  const rows: Seat[][] = []
+  for (const seat of all ?? []) {
+    if (rows.at(-1)?.[0].row === seat.row) rows.at(-1)!.push(seat)
+    else rows.push([seat])
+  }
+
+  function toggle(seat: Seat) {
     onSeats((seats) => {
-      if (seats.includes(seat)) return seats.filter((s) => s !== seat)
+      if (seats.some((s) => s.seatID === seat.seatID)) return seats.filter((s) => s.seatID !== seat.seatID)
       if (seats.length >= MAX_SEATS) return seats
-      return [...seats, seat].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+      return [...seats, seat].sort((a, b) => a.row.localeCompare(b.row) || a.number - b.number)
     })
   }
 
@@ -226,39 +249,40 @@ function SeatPicker({
         <span>
           {formatDay(showtime.start)}, {formatTime(showtime.start)}
         </span>
-        <span>Screen {showtime.movie.screen}</span>
+        <span>{showtime.room}</span>
       </p>
 
+      {all === null && (
+        <p className="error" role="alert">
+          Couldn't load the seats. Go back and pick the session again.
+        </p>
+      )}
       <div className="auditorium">
         <div className="screen" aria-hidden="true" />
         <div className="seats" role="group" aria-label="Seats">
-          {ROWS.map((row) => (
-            <div className="row" key={row}>
+          {rows.map((row) => (
+            <div className="row" key={row[0].row}>
               <span className="row-label" aria-hidden="true">
-                {row}
+                {row[0].row}
               </span>
-              {Array.from({ length: SEATS_PER_ROW }, (_, i) => {
-                const n = i + 1
-                const id = `${row}${n}`
-                const isTaken = taken.has(id)
-                const selected = seats.includes(id)
+              {row.map((seat) => {
+                const isTaken = seat.taken || booked.includes(seat.seatID)
+                const selected = seats.some((s) => s.seatID === seat.seatID)
                 return (
-                  <Fragment key={id}>
-                    <button
-                      className="seat"
-                      disabled={isTaken}
-                      aria-pressed={selected}
-                      aria-label={`Row ${row}, seat ${n}${isTaken ? ', taken' : ''}`}
-                      onClick={() => toggle(id)}
-                    >
-                      {selected && n}
-                    </button>
-                    {AISLES_AFTER.includes(n) && <span className="aisle" />}
-                  </Fragment>
+                  <button
+                    key={seat.seatID}
+                    className="seat"
+                    disabled={isTaken}
+                    aria-pressed={selected}
+                    aria-label={`Row ${seat.row}, seat ${seat.number}${seat.type === 'standard' ? '' : `, ${seat.type}`}${isTaken ? ', taken' : ''}`}
+                    onClick={() => toggle(seat)}
+                  >
+                    {selected && seat.number}
+                  </button>
                 )
               })}
               <span className="row-label" aria-hidden="true">
-                {row}
+                {row[0].row}
               </span>
             </div>
           ))}
@@ -281,12 +305,12 @@ function SeatPicker({
         <div aria-live="polite">
           <p>
             {seats.length
-              ? `${seats.length} ${seats.length === 1 ? 'seat' : 'seats'}: ${seats.join(', ')}`
+              ? `${seats.length} ${seats.length === 1 ? 'seat' : 'seats'}: ${seats.map(seatLabel).join(', ')}`
               : `Choose up to ${MAX_SEATS} seats.`}
           </p>
           {atMax && <p className="hint">That's the most seats one booking can hold.</p>}
         </div>
-        <strong className="total">{money.format(seats.length * PRICE)}</strong>
+        <strong className="total">{total(showtime, seats.length)}</strong>
         <button className="primary" disabled={!seats.length} onClick={onContinue}>
           Continue to checkout
         </button>
@@ -304,7 +328,7 @@ function Checkout({
   onConfirm,
 }: {
   showtime: Showtime
-  seats: string[]
+  seats: Seat[]
   user: User | null | undefined
   onSignedIn: (u: User) => void
   onBack: () => void
@@ -352,7 +376,7 @@ function Done({ booking, onAgain }: { booking: Booking; onAgain: () => void }) {
   )
 }
 
-function Ticket({ showtime, seats, bookingRef }: { showtime: Showtime; seats: string[]; bookingRef?: string }) {
+function Ticket({ showtime, seats, bookingRef }: { showtime: Showtime; seats: Seat[]; bookingRef?: string }) {
   return (
     <article className="ticket" aria-label="Ticket">
       <div className="ticket-main">
@@ -363,12 +387,12 @@ function Ticket({ showtime, seats, bookingRef }: { showtime: Showtime; seats: st
           <dd>
             {formatDay(showtime.start)}, {formatTime(showtime.start)}
           </dd>
-          <dt>Screen</dt>
-          <dd>{showtime.movie.screen}</dd>
+          <dt>Where</dt>
+          <dd>{showtime.room}</dd>
           <dt>Seats</dt>
-          <dd>{seats.join(', ')}</dd>
+          <dd>{seats.map(seatLabel).join(', ')}</dd>
           <dt>Total</dt>
-          <dd>{money.format(seats.length * PRICE)}</dd>
+          <dd>{total(showtime, seats.length)}</dd>
         </dl>
       </div>
       <div className="stub">

@@ -327,10 +327,6 @@ p {
   text-align: center;
 }
 
-.aisle {
-  width: calc(var(--seat-size) * 0.6);
-}
-
 .seat {
   width: var(--seat-size);
   height: var(--seat-size);
