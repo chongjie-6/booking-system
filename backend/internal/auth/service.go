@@ -6,11 +6,14 @@ import (
 	"booking-system/pkg/auth"
 	"booking-system/pkg/db"
 	"booking-system/pkg/geoip"
+	"booking-system/pkg/rdb"
 	"context"
 	"crypto/rand"
 	"errors"
+	"log"
 	"net/netip"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -22,6 +25,27 @@ var (
 	ErrWrongPassword      = errors.New("current password is incorrect")
 	ErrResetTokenInvalid  = errors.New("reset token is unknown, expired or used")
 )
+
+// PruneResetTokens hourly deletes expired password reset tokens until ctx is cancelled, like outbox.Prune.
+// The Redis lock means one instance prunes per hour; if Redis is down every instance prunes, which is safe since the delete is idempotent.
+func PruneResetTokens(ctx context.Context) {
+	tick := time.NewTicker(time.Hour * 24)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+		}
+		// The TTL is shorter than the interval so it has expired by the next tick, and is never released, so other instances skip this hour.
+		if ok, err := rdb.AcquireLock(ctx, "reset_tokens:prune", 50*time.Minute); err == nil && !ok {
+			continue
+		}
+		if err := dbPruneResetTokens(); err != nil {
+			log.Printf("reset token prune: %v", err)
+		}
+	}
+}
 
 // ForgotPasswordService queues a password reset email if a user has this email. The notification consumer makes the token
 // when it sends the email. Takes a context and email; returns nil for an unknown email too, or the database error.

@@ -4,6 +4,7 @@ import (
 	"booking-system/internal/user"
 	"booking-system/pkg/db"
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -22,7 +23,7 @@ func dbSetPasswordAndRevokeTokens(ctx context.Context, q db.Querier, userID stri
 // dbUseResetToken deletes an unexpired reset token, then the user's other reset tokens, so each emailed link works once
 // and a reset retires every older link. Takes a context, a Tx and the token hash; returns the user ID, or pgx.ErrNoRows
 // if the token is unknown, expired or used. The DELETE locks the row, so a concurrent reuse matches nothing.
-// ponytail: expired tokens that are never used stay in the table; prune them like the outbox if it ever grows.
+// Expired tokens that are never used are deleted by PruneResetTokens.
 func dbUseResetToken(ctx context.Context, tx pgx.Tx, tokenHash string) (string, error) {
 	var userID string
 	err := tx.QueryRow(ctx, `
@@ -35,6 +36,14 @@ func dbUseResetToken(ctx context.Context, tx pgx.Tx, tokenHash string) (string, 
 	}
 	_, err = tx.Exec(ctx, `DELETE FROM password_reset_tokens WHERE user_id = @user_id`, pgx.NamedArgs{"user_id": userID})
 	return userID, err
+}
+
+// dbPruneResetTokens deletes expired reset tokens, which no link can use any more, so the table doesn't grow forever.
+func dbPruneResetTokens() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	_, err := db.Pool.Exec(ctx, `DELETE FROM password_reset_tokens WHERE expires_at < now()`)
+	return err
 }
 
 // dbRevokeRefreshToken revokes a still-valid refresh token. Takes a context, a Pool or Tx, and the token hash; returns the old row,
