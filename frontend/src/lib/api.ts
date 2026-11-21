@@ -43,3 +43,10 @@ export async function api<T = unknown>(path: string, { method = 'GET', body }: {
   }
   return json?.data as T
 }
+
+// Set when the user leaves checkout. The seat map waits for it, so the user's own seats don't come back as taken.
+export let releasing: Promise<unknown> = Promise.resolve()
+
+export function releaseHold(eventID: string, seatIDs: string[]) {
+  releasing = api(`/events/${eventID}/hold`, { method: 'DELETE', body: { seatIDs } }).catch(() => {})
+}

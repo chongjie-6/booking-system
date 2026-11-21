@@ -1,5 +1,6 @@
 import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 
 // The dev server forwards API paths to the Go backend, so the page and API share an origin and the auth cookies just work.
@@ -13,6 +14,9 @@ const api = {
 
 // https://vite.dev/config/
 export default defineConfig({
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+  },
   plugins: [
     react(),
     babel({ presets: [reactCompilerPreset()] })

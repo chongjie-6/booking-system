@@ -1,5 +1,5 @@
 import { useId, useState, type FormEvent, type InputHTMLAttributes } from "react";
-import { api, ApiError, type User } from "./api";
+import { api, ApiError, type User } from "@/lib/api";
 
 export type AuthMode = "login" | "register" | "forgot" | "reset";
 

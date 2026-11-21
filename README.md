@@ -94,7 +94,7 @@ Stop the server before replacing the file, and start it again afterwards. Set `G
 
 ## Frontend
 
-In dev, Vite forwards `/auth`, `/user`, `/movies` and `/events` to the backend on `localhost:8080` (see `vite.config.ts`), so the page and API share an origin and the auth cookies need no CORS. Add each new API path prefix there. `src/api.ts` wraps `fetch`: when the 15-minute access token has expired it calls `/auth/refresh` once and retries.
+In dev, Vite forwards `/auth`, `/user`, `/movies` and `/events` to the backend on `localhost:8080` (see `vite.config.ts`), so the page and API share an origin and the auth cookies need no CORS. Add each new API path prefix there. `src/lib/api.ts` wraps `fetch`: when the 15-minute access token has expired it calls `/auth/refresh` once and retries.
 
 ```sh
 cd frontend
