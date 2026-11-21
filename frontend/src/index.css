@@ -93,9 +93,53 @@ p {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 20px 0;
-  margin-bottom: 32px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  /* Spans the window, with its content kept in line with #root's. */
+  margin: 0 calc(50% - 50vw) 32px;
+  padding: 20px max(16px, 50vw - 504px);
   border-bottom: 1px solid var(--curtain);
+  background: rgb(36 8 15 / 0.85);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+/* Over the featured banner, the masthead floats as clearer frosted glass. */
+#root:has(.hero) .masthead {
+  position: fixed;
+  inset: 0 0 auto;
+  margin: 0;
+  padding-inline: max(16px, 50% - 504px);
+  border-bottom-color: rgb(255 255 255 / 0.12);
+  background: linear-gradient(rgb(36 8 15 / 0.2), rgb(10 2 4 / 0.6));
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+
+  .wordmark,
+  .account,
+  .link {
+    color: #fff;
+  }
+
+  /* Fades in once the banner has scrolled away, so the glass turns solid. A gradient can't transition, opacity can. */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--velvet);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+}
+
+#root:has(.hero[data-past]) .masthead {
+  border-bottom-color: var(--curtain);
+
+  &::before {
+    opacity: 1;
+  }
 }
 
 .wordmark {
@@ -118,6 +162,8 @@ p {
 /* Reserve the scrollbar's space so hiding it while the drawer is open doesn't shift the page. */
 html {
   scrollbar-gutter: stable;
+  /* Keeps keyboard-focused elements clear of the sticky masthead. */
+  scroll-padding-top: 88px;
 }
 
 body:has(.drawer[open]) {
@@ -373,6 +419,137 @@ a.back {
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+}
+
+/* Breaks out of #root to the full window width; body clips the part under the scrollbar gutter. */
+body {
+  overflow-x: clip;
+}
+
+.hero {
+  --hero-height: min(78svh, 640px);
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  height: var(--hero-height);
+  margin: 0 calc(50% - 50vw) 40px;
+  overflow: hidden;
+  background: var(--curtain);
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(to top, var(--velvet), transparent 55%),
+      linear-gradient(to right, rgb(0 0 0 / 0.7), transparent 65%);
+  }
+
+  @media (max-width: 600px) {
+    --hero-height: min(70svh, 520px);
+  }
+}
+
+.hero-media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+}
+
+/* An iframe can't object-fit, so size the 16:9 player to cover the banner and centre it.
+   The scale crops the black bars of trailers letterboxed to 2.39:1 inside a 16:9 video. */
+.hero-video {
+  inset: 50% auto auto 50%;
+  width: max(100%, var(--hero-height) * 16 / 9);
+  height: auto;
+  aspect-ratio: 16 / 9;
+  translate: -50% -50%;
+  scale: 1.35;
+  pointer-events: none;
+}
+
+.hero-body {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 0 16px 40px;
+
+  h2 {
+    max-width: 14ch;
+    font-size: clamp(2.75rem, 8vw, 5.5rem);
+  }
+
+  .primary {
+    display: inline-block;
+    text-decoration: none;
+  }
+}
+
+.hero-tag {
+  display: inline-block;
+  margin-bottom: 12px;
+  padding: 2px 8px;
+  background: var(--brass);
+  color: var(--ink);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.hero-synopsis {
+  display: -webkit-box;
+  max-width: 60ch;
+  margin: 12px 0 24px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.hero-dots {
+  display: flex;
+  gap: 8px;
+  margin-top: 24px;
+
+  button {
+    width: 32px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    background: linear-gradient(var(--muted), var(--muted)) center / 100% 3px no-repeat;
+    opacity: 0.5;
+
+    &[aria-pressed='true'] {
+      opacity: 1;
+      background-image: linear-gradient(var(--paper), var(--paper));
+    }
+  }
+}
+
+.session-head {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 20px;
+  align-items: end;
+
+  .poster:not(:has(img)) {
+    padding: 8px;
+
+    span {
+      font-size: 0.95rem;
+    }
+  }
+
+  @media (max-width: 600px) {
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 14px;
   }
 }
 

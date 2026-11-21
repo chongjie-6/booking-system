@@ -49,4 +49,6 @@ JOIN rooms r ON r.name = m.room,
 generate_series(0, 6) AS d,
 unnest(m.times) AS t;
 
+UPDATE movies SET featured = true WHERE title = 'Interstellar';
+
 COMMIT;

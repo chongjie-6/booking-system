@@ -28,7 +28,7 @@ Settings come from environment variables, or from `backend/.env` (gitignored), w
 | `PORT` | no | Port to listen on; default `8080` |
 | `REDIS_ADDRESS`, `REDIS_PASSWORD` | no | Redis for rate limiting, e.g. `localhost:6379` |
 | `GEOIP_DB_PATH` | no | See [IP country database](#ip-country-database) |
-| `TMDB_TOKEN` | no | [TMDB](https://www.themoviedb.org/settings/api) API read access token. Within a minute of seeding, films with a TMDB ID get TMDB's synopsis, runtime and poster; without it they keep the seed's text and a drawn poster. TMDB's API is free for non-commercial use, and its terms require the credit in the page footer |
+| `TMDB_TOKEN` | no | [TMDB](https://www.themoviedb.org/settings/api) API read access token. Within a minute of seeding, films with a TMDB ID get TMDB's synopsis, runtime, poster, backdrop and YouTube trailer; without it they keep the seed's text and a drawn poster. TMDB's API is free for non-commercial use, and its terms require the credit in the page footer |
 | `RESEND_API_KEY`, `EMAIL_FROM` | no | [Resend](https://resend.com) key and sender for login alerts and password reset emails; without them no emails are sent |
 
 `docker-compose.yml` runs Postgres 18, Redis, Kafka and Kafka Connect (Debezium) locally; its header lists the matching settings. If you already run one of them, start only the others, e.g. `docker compose up -d redis kafka connect`. Then register the outbox connector, which sends outbox rows to Kafka (safe to re-run; the backend's migrations must have run once so the `outbox` table exists):

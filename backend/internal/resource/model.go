@@ -10,7 +10,10 @@ type Movie struct {
 	RuntimeMinutes int       `db:"runtime_minutes" json:"runtimeMinutes"`
 	Rating         string    `db:"rating" json:"rating"`
 	Synopsis       string    `db:"synopsis" json:"synopsis"`
-	PosterPath     string    `db:"poster_path" json:"posterPath"` // TMDB poster, e.g. /abc.jpg; "" until fetched or if there is none
+	Featured       bool      `db:"featured" json:"featured"`          // pinned to the top of the listing
+	PosterPath     string    `db:"poster_path" json:"posterPath"`     // TMDB poster, e.g. /abc.jpg; "" until fetched or if there is none
+	BackdropPath   string    `db:"backdrop_path" json:"backdropPath"` // TMDB wide still, like PosterPath
+	TrailerKey     string    `db:"trailer_key" json:"trailerKey"`     // YouTube video key; "" until fetched or if there is none
 	Showings       []Showing `db:"showings" json:"showings"`
 }
 

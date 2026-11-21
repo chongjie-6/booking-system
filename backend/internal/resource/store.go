@@ -8,10 +8,13 @@ import (
 )
 
 // dbListMovies fetches every movie that has a showing in the next 3 days, with those showings. Three days covers the
-// frontend's today, tomorrow and the day after in any time zone. Takes a context; returns the movies (by title) or the database error.
+// frontend's today, tomorrow and the day after in any time zone. Takes a context; returns the movies (featured first,
+// then by title) or the database error.
 func dbListMovies(ctx context.Context) ([]Movie, error) {
 	rows, _ := db.Pool.Query(ctx, `
-	SELECT m.movie_id, m.title, m.genre, m.runtime_minutes, m.rating, m.synopsis, COALESCE(m.poster_path, '') AS poster_path,
+	SELECT m.movie_id, m.title, m.genre, m.runtime_minutes, m.rating, m.synopsis, m.featured,
+	COALESCE(m.poster_path, '') AS poster_path, COALESCE(m.backdrop_path, '') AS backdrop_path,
+	COALESCE(m.trailer_key, '') AS trailer_key,
 	json_agg(json_build_object(
 		'eventID', e.event_id, 'startsAt', e.starts_at, 'priceCents', e.price_cents, 'room', r.name
 	) ORDER BY e.starts_at) AS showings
@@ -20,7 +23,7 @@ func dbListMovies(ctx context.Context) ([]Movie, error) {
 	JOIN rooms r USING (room_id)
 	WHERE e.starts_at > now() AND e.starts_at < now() + interval '3 days'
 	GROUP BY m.movie_id
-	ORDER BY m.title
+	ORDER BY m.featured DESC, m.title
 	`)
 	return pgx.CollectRows(rows, pgx.RowToStructByName[Movie])
 }
@@ -42,7 +45,7 @@ func dbListSeats(ctx context.Context, eventID string) ([]Seat, error) {
 // dbUnfetchedMovies finds movies with a TMDB ID whose details haven't been fetched yet. Takes a context;
 // returns their TMDB IDs keyed by movie ID, or the database error.
 func dbUnfetchedMovies(ctx context.Context) (map[string]int, error) {
-	rows, _ := db.Pool.Query(ctx, `SELECT movie_id, tmdb_id FROM movies WHERE tmdb_id IS NOT NULL AND poster_path IS NULL`)
+	rows, _ := db.Pool.Query(ctx, `SELECT movie_id, tmdb_id FROM movies WHERE tmdb_id IS NOT NULL AND trailer_key IS NULL`)
 	ids := map[string]int{}
 	var movieID string
 	var tmdbID int
@@ -60,8 +63,13 @@ func dbSetTMDB(ctx context.Context, movieID string, m tmdbMovie) error {
 	UPDATE movies SET
 		synopsis = COALESCE(NULLIF(@overview::text, ''), synopsis),
 		runtime_minutes = COALESCE(NULLIF(@runtime::int, 0), runtime_minutes),
-		poster_path = @poster
+		poster_path = @poster,
+		backdrop_path = @backdrop,
+		trailer_key = @trailer
 	WHERE movie_id = @movie_id
-	`, pgx.NamedArgs{"overview": m.Overview, "runtime": m.Runtime, "poster": m.PosterPath, "movie_id": movieID})
+	`, pgx.NamedArgs{
+		"overview": m.Overview, "runtime": m.Runtime, "poster": m.PosterPath,
+		"backdrop": m.BackdropPath, "trailer": m.TrailerKey, "movie_id": movieID,
+	})
 	return err
 }

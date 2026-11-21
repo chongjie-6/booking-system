@@ -8,7 +8,10 @@ export type Movie = {
   runtimeMinutes: number
   rating: string
   synopsis: string
+  featured: boolean
   posterPath: string // TMDB image path, '' when there's none
+  backdropPath: string // likewise
+  trailerKey: string // YouTube video key, '' when there's none
   showings: Showing[]
 }
 
@@ -47,6 +50,7 @@ export function findShowtime(movies: Movie[], eventID: string): Showtime | undef
 }
 
 export const posterURL = (path: string) => `https://image.tmdb.org/t/p/w342${path}`
+export const backdropURL = (path: string) => `https://image.tmdb.org/t/p/w1280${path}`
 
 // Films without a TMDB poster get a drawn one, in a stable colour from the film's ID.
 export function hue(movieID: string): number {
@@ -61,5 +65,6 @@ export const seatLabel = (s: Seat) => `${s.row}${s.number}`
 export const total = (showtime: Showtime, seats: number) => money.format((showtime.priceCents * seats) / 100)
 
 export const money = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' })
+export const formatRuntime = (minutes: number) => `${Math.floor(minutes / 60)}h ${minutes % 60}m`
 export const formatTime = (d: Date) => d.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })
 export const formatDay = (d: Date) => d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })

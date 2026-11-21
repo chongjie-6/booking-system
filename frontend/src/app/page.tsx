@@ -1,9 +1,7 @@
-import type { CSSProperties } from "react";
 import {
   formatDay,
+  formatRuntime,
   formatTime,
-  hue,
-  posterURL,
   slug,
   showtimesFor,
   upcomingDays,
@@ -12,6 +10,8 @@ import {
 } from "@/lib/data";
 import { Link, useParams } from "react-router";
 import { MoviesStatus } from "@/components/MoviesStatus";
+import { Poster, TmdbCredit } from "@/components/Poster";
+import { Hero } from "@/components/Hero";
 import { useTitle } from "@/lib/routes";
 
 export default function Films({
@@ -37,6 +37,7 @@ export default function Films({
 
   return (
     <>
+      {!movieSlug && <Hero movies={movies?.filter((m) => m.featured) ?? []} />}
       <main>
         {movieSlug && (
           <Link className="back" to="/">
@@ -74,21 +75,7 @@ export default function Films({
             );
             return (
               <li key={movie.movieID} className="film">
-                <div
-                  className="poster"
-                  style={{ "--hue": hue(movie.movieID) } as CSSProperties}
-                  aria-hidden="true"
-                >
-                  {movie.posterPath ? (
-                    <img
-                      src={posterURL(movie.posterPath)}
-                      alt=""
-                      loading="lazy"
-                    />
-                  ) : (
-                    <span>{movie.title}</span>
-                  )}
-                </div>
+                <Poster movie={movie} />
                 <div>
                   {!movieSlug && (
                     <h2>
@@ -99,10 +86,7 @@ export default function Films({
                   )}
                   <p className="meta">
                     <span>{movie.genre}</span>
-                    <span>
-                      {Math.floor(movie.runtimeMinutes / 60)}h{" "}
-                      {movie.runtimeMinutes % 60}m
-                    </span>
+                    <span>{formatRuntime(movie.runtimeMinutes)}</span>
                     <span className="rating">{movie.rating}</span>
                   </p>
                   <p className="synopsis">{movie.synopsis}</p>
@@ -143,16 +127,7 @@ export default function Films({
           })}
         </ul>
       </main>
-      {shown?.some((m) => m.posterPath) && (
-        <footer className="credits">
-          Film details and posters from{" "}
-          <a className="link" href="https://www.themoviedb.org">
-            TMDB
-          </a>
-          . This product uses the TMDB API but is not endorsed or certified by
-          TMDB.
-        </footer>
-      )}
+      {shown?.some((m) => m.posterPath) && <TmdbCredit />}
     </>
   );
 }
