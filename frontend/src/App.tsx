@@ -59,11 +59,11 @@ export default function App() {
   }
 
   useEffect(() => {
-    api<User>("/user").then(setUser, () => setUser(null));
+    api.get<User>("/user").then(setUser, () => setUser(null));
   }, []);
 
   useEffect(() => {
-    api<Movie[]>("/movies").then(setMovies, () => setMovies(null));
+    api.get<Movie[]>("/movies").then(setMovies, () => setMovies(null));
   }, [moviesAttempt]);
 
   // A layout effect, so a hold is released before the seat map's own effect asks which seats are taken.
@@ -100,7 +100,7 @@ export default function App() {
 
   function signOut() {
     setSignOutFailed(false);
-    api("/auth/logout", { method: "POST" }).then(
+    api.post("/auth/logout").then(
       () => setUser(null),
       () => setSignOutFailed(true),
     );

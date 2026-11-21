@@ -43,28 +43,19 @@ export function Auth({
     setNotice("");
     try {
       if (mode === "login") {
-        await api("/auth/login", {
-          method: "POST",
-          body: { email: f.email, password: f.password },
-        });
-        onSignedIn(await api<User>("/user"));
+        await api.post("/auth/login", { email: f.email, password: f.password });
+        onSignedIn(await api.get<User>("/user"));
       } else if (mode === "register") {
         onSignedIn(
-          await api<User>("/auth/register", { method: "POST", body: f }),
+          await api.post<User>("/auth/register", f),
         );
       } else if (mode === "forgot") {
-        await api("/auth/password/forgot", {
-          method: "POST",
-          body: { email: f.email },
-        });
+        await api.post("/auth/password/forgot", { email: f.email });
         setNotice(
           "If that email has an account, we've sent it a link to reset the password.",
         );
       } else {
-        await api("/auth/password/reset", {
-          method: "POST",
-          body: { token: resetToken, newPassword: f.newPassword },
-        });
+        await api.post("/auth/password/reset", { token: resetToken, newPassword: f.newPassword });
         switchTo("login");
         setNotice("Password changed. Sign in with your new password.");
       }

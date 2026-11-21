@@ -36,10 +36,7 @@ export default function Checkout({
   useEffect(() => {
     if (!user) return;
     const seatIDs = seats.map((s) => s.seatID);
-    api<{ holdSeconds: number }>(`/events/${showtime.id}/hold`, {
-      method: "PUT",
-      body: { seatIDs },
-    }).then((r) => {
+    api.put<{ holdSeconds: number }>(`/events/${showtime.id}/hold`, { seatIDs }).then((r) => {
       setHeldUntil(Date.now() + r.holdSeconds * 1000);
       setError(null);
     }, setError);
@@ -50,10 +47,7 @@ export default function Checkout({
     setError(null);
     try {
       const body = { seatIDs: seats.map((s) => s.seatID) };
-      const { ref } = await api<{ ref: string }>(`${path}/bookings`, {
-        method: "POST",
-        body,
-      });
+      const { ref } = await api.post<{ ref: string }>(`${path}/bookings`, body);
       onBooked(u, ref);
     } catch (err) {
       setError(err as Error);

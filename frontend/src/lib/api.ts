@@ -22,7 +22,7 @@ function refresh(): Promise<boolean> {
 
 // Calls the API and returns the response's data. Access tokens last 15 minutes, so a 401 refreshes them and retries once;
 // a 401 that survives that means the user is signed out. Throws ApiError with the server's message on failure.
-export async function api<T = unknown>(path: string, { method = 'GET', body }: { method?: string; body?: unknown } = {}): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const send = () =>
     fetch(path, {
       method,
@@ -44,9 +44,17 @@ export async function api<T = unknown>(path: string, { method = 'GET', body }: {
   return json?.data as T
 }
 
+export const api = {
+  get: <T = unknown>(path: string) => request<T>('GET', path),
+  post: <T = unknown>(path: string, body?: unknown) => request<T>('POST', path, body),
+  put: <T = unknown>(path: string, body?: unknown) => request<T>('PUT', path, body),
+  patch: <T = unknown>(path: string, body?: unknown) => request<T>('PATCH', path, body),
+  del: <T = unknown>(path: string, body?: unknown) => request<T>('DELETE', path, body),
+}
+
 // Set when the user leaves checkout. The seat map waits for it, so the user's own seats don't come back as taken.
 export let releasing: Promise<unknown> = Promise.resolve()
 
 export function releaseHold(eventID: string, seatIDs: string[]) {
-  releasing = api(`/events/${eventID}/hold`, { method: 'DELETE', body: { seatIDs } }).catch(() => {})
+  releasing = api.del(`/events/${eventID}/hold`, { seatIDs }).catch(() => {})
 }

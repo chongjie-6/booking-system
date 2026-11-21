@@ -38,7 +38,7 @@ export default function SeatPicker({
 
   useEffect(() => {
     releasing
-      .then(() => api<Seat[]>(`/events/${showtime.id}/seats`))
+      .then(() => api.get<Seat[]>(`/events/${showtime.id}/seats`))
       .then(
         (all) => {
           setAll(all);
