@@ -16,8 +16,9 @@
   --display: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
   --sans: 'Figtree', system-ui, sans-serif;
 
-  --seat-size: clamp(15px, 4.4vw, 32px);
-  --seat-gap: clamp(2px, 0.8vw, 6px);
+  /* Seat centres stay at least 24px apart (WCAG 2.5.8), and a 14-seat row still fits a 360px phone. */
+  --seat-size: clamp(22px, 4.4vw, 32px);
+  --seat-gap: clamp(2px, 0.6vw, 6px);
 
   color-scheme: dark;
   font: 400 1rem/1.55 var(--sans);
@@ -46,6 +47,10 @@ button {
   font: inherit;
   color: inherit;
   cursor: pointer;
+  transition:
+    color 0.15s,
+    background-color 0.15s,
+    border-color 0.15s;
 }
 
 button:disabled {
@@ -55,6 +60,11 @@ button:disabled {
 :focus-visible {
   outline: 2px solid var(--brass);
   outline-offset: 3px;
+}
+
+/* Headings get focus after a step change so screen readers announce them; they aren't controls, so no ring. */
+[tabindex='-1']:focus {
+  outline: none;
 }
 
 h1,
@@ -96,6 +106,93 @@ p {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--brass);
+}
+
+.link.signin {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+body:has(.drawer[open]) {
+  overflow: hidden;
+}
+
+/* The dialog itself has no padding, so a click whose target is the dialog landed on the backdrop. */
+.drawer {
+  inset: 0 0 0 auto;
+  width: min(440px, 100%);
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--curtain);
+  background: var(--velvet);
+  color: var(--paper);
+  translate: 100% 0;
+  transition:
+    translate 0.3s ease,
+    overlay 0.3s allow-discrete,
+    display 0.3s allow-discrete;
+
+  &[open] {
+    translate: 0;
+  }
+
+  &::backdrop {
+    background: rgb(0 0 0 / 0.55);
+    backdrop-filter: blur(8px);
+    opacity: 0;
+    transition:
+      opacity 0.3s,
+      overlay 0.3s allow-discrete,
+      display 0.3s allow-discrete;
+  }
+
+  &[open]::backdrop {
+    opacity: 1;
+  }
+
+  .close {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    margin-left: auto;
+    margin-bottom: 8px;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: none;
+
+    &:hover {
+      border-color: var(--paper);
+    }
+  }
+}
+
+@starting-style {
+  .drawer[open] {
+    translate: 100% 0;
+  }
+
+  .drawer[open]::backdrop {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer,
+  .drawer::backdrop,
+  .float span {
+    transition: none;
+  }
+}
+
+.drawer-body {
+  padding: 24px 32px 48px;
 }
 
 .account {
@@ -145,6 +242,23 @@ p {
   text-underline-offset: 4px;
 }
 
+a.back {
+  display: inline-block;
+}
+
+.wordmark {
+  text-decoration: none;
+}
+
+.film h2 a {
+  color: inherit;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
 .back::before {
   content: '‹ ';
 }
@@ -164,6 +278,19 @@ p {
   &:disabled {
     background: var(--curtain);
     color: var(--muted);
+  }
+}
+
+.secondary {
+  padding: 13px 24px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: none;
+  font-weight: 700;
+
+  &:hover {
+    border-color: var(--brass);
+    color: var(--brass);
   }
 }
 
@@ -275,8 +402,8 @@ p {
 
 .auditorium {
   position: relative;
-  margin: 40px 0 24px;
-  padding-top: 4px;
+  margin: 40px -16px 24px;
+  padding-block: 4px;
   overflow-x: auto;
 
   /* Light thrown from the screen onto the front rows. */
@@ -325,12 +452,21 @@ p {
   font-size: 0.75rem;
   font-weight: 600;
   text-align: center;
+
+  &:last-child {
+    @media (max-width: 480px) {
+      display: none;
+    }
+  }
 }
 
 .seat {
+  display: grid;
+  place-items: center;
   width: var(--seat-size);
   height: var(--seat-size);
   padding: 0;
+  line-height: 1;
   border: 0;
   border-radius: 40% 40% 18% 18%;
   background: var(--seat-free);
@@ -338,11 +474,14 @@ p {
   font-size: calc(var(--seat-size) * 0.42);
   font-weight: 700;
   transition:
-    background 0.12s,
-    transform 0.12s;
+    background-color 0.15s,
+    transform 0.15s ease-out;
 
-  &:hover:not(:disabled) {
-    background: var(--seat-hover);
+  /* Touch screens keep :hover after a tap, which would hide the selected colour. */
+  @media (hover: hover) {
+    &:hover:not(:disabled, [aria-pressed='true']) {
+      background: var(--seat-hover);
+    }
   }
 
   &[aria-pressed='true'] {
@@ -352,7 +491,17 @@ p {
 
   &:disabled {
     background: var(--seat-taken);
+    color: var(--muted);
   }
+}
+
+/* Seat types are told apart by shape and marks as well as by label, for people who can't see the colours. */
+[data-type='companion'] {
+  box-shadow: inset 0 0 0 2px var(--paper);
+}
+
+[data-type='premium'] {
+  box-shadow: inset 0 -4px 0 var(--brass);
 }
 
 .legend {
@@ -374,10 +523,15 @@ p {
 }
 
 .swatch {
-  width: 14px;
-  height: 14px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
   border-radius: 40% 40% 18% 18%;
   background: var(--seat-free);
+  color: var(--ink);
+  font-size: 0.75rem;
+  line-height: 1;
 
   &.selected {
     background: var(--brass);
@@ -415,6 +569,24 @@ p {
   font-variant-numeric: tabular-nums;
 }
 
+.hold {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  padding: 14px 16px;
+  border: 1px solid var(--curtain);
+  border-radius: 6px;
+
+  strong {
+    color: var(--brass);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &.warn {
+    border-color: var(--brass);
+  }
+}
+
 /* Checkout */
 
 .checkout {
@@ -437,12 +609,6 @@ p {
   gap: 20px;
   max-width: 420px;
 
-  label {
-    display: grid;
-    gap: 6px;
-    font-weight: 600;
-  }
-
   input {
     padding: 12px 14px;
     border: 1px solid var(--line);
@@ -459,14 +625,85 @@ p {
   }
 }
 
+.fields .group {
+  display: grid;
+  gap: 12px;
+}
+
+.fields .pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.rule {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+/* An input that holds its own label. placeholder=" " lets :placeholder-shown tell an empty input from a filled one. */
+.float {
+  position: relative;
+  display: grid;
+
+  span {
+    position: absolute;
+    top: 50%;
+    left: 15px;
+    translate: 0 -50%;
+    color: var(--muted);
+    pointer-events: none;
+    transition:
+      top 0.15s,
+      translate 0.15s,
+      font-size 0.15s;
+  }
+
+  input {
+    min-width: 0;
+    padding: 24px 14px 8px;
+  }
+
+  &:has(input:focus, input:not(:placeholder-shown), input:autofill) span {
+    top: 8px;
+    translate: 0;
+    font-size: 0.75rem;
+  }
+
+  &:has(button) input {
+    padding-right: 48px;
+  }
+
+  button {
+    position: absolute;
+    top: 50%;
+    right: 14px;
+    display: flex;
+    translate: 0 -50%;
+  }
+}
+
 .error {
   color: var(--error);
 }
 
+.actions {
+  display: grid;
+  gap: 10px;
+}
+
 .switch {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 24px;
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 28px;
+  border-top: 1px solid var(--curtain);
+
+  p {
+    margin: 0;
+    color: var(--muted);
+  }
 }
 
 /* Ticket */

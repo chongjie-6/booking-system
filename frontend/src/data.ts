@@ -31,10 +31,18 @@ export function upcomingDays(count = 3): Date[] {
   return Array.from({ length: count }, (_, i) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + i))
 }
 
+const toShowtime = (movie: Movie, s: Showing): Showtime =>
+  ({ id: s.eventID, movie, start: new Date(s.startsAt), priceCents: s.priceCents, room: s.room })
+
 export function showtimesFor(movie: Movie, day: Date): Showtime[] {
-  return movie.showings
-    .map((s) => ({ id: s.eventID, movie, start: new Date(s.startsAt), priceCents: s.priceCents, room: s.room }))
-    .filter((s) => s.start.toDateString() === day.toDateString())
+  return movie.showings.map((s) => toShowtime(movie, s)).filter((s) => s.start.toDateString() === day.toDateString())
+}
+
+export function findShowtime(movies: Movie[], eventID: string): Showtime | undefined {
+  for (const movie of movies) {
+    const s = movie.showings.find((s) => s.eventID === eventID)
+    if (s) return toShowtime(movie, s)
+  }
 }
 
 // Posters are drawn, not images, so each film gets a stable colour from its ID.
