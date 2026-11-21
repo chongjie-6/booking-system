@@ -52,6 +52,8 @@ export function hue(movieID: string): number {
   return h
 }
 
+export const slug = (title: string) => title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+
 export const seatLabel = (s: Seat) => `${s.row}${s.number}`
 export const total = (showtime: Showtime, seats: number) => money.format((showtime.priceCents * seats) / 100)
 

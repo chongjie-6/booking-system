@@ -165,7 +165,7 @@ export default function App() {
         <Navigate to="/" replace />
       ) : (
         <Routes>
-          {["/", "/movies/:movieID"].map((path) => (
+          {["/", "/movies/:movie"].map((path) => (
             <Route
               key={path}
               path={path}

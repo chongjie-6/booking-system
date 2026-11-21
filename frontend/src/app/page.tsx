@@ -3,6 +3,7 @@ import {
   formatDay,
   formatTime,
   hue,
+  slug,
   showtimesFor,
   upcomingDays,
   type Movie,
@@ -25,23 +26,23 @@ export default function Films({
   onDay: (i: number) => void;
   onPick: (s: Showtime) => void;
 }) {
-  const { movieID } = useParams();
+  const { movie: movieSlug } = useParams();
   const days = upcomingDays();
   const now = new Date();
-  const shown = movieID
-    ? movies?.filter((m) => m.movieID === movieID)
+  const shown = movieSlug
+    ? movies?.filter((m) => slug(m.title) === movieSlug)
     : movies;
-  useTitle((movieID && shown?.[0]?.title) || "Now showing");
+  useTitle((movieSlug && shown?.[0]?.title) || "Now showing");
 
   return (
     <main>
-      {movieID && (
+      {movieSlug && (
         <Link className="back" to="/">
           All films
         </Link>
       )}
       <h1 tabIndex={-1}>
-        {movieID ? (shown?.[0]?.title ?? "Film") : "Now showing"}
+        {movieSlug ? (shown?.[0]?.title ?? "Film") : "Now showing"}
       </h1>
       <nav className="days" aria-label="Day">
         {days.map((d, i) => (
@@ -52,7 +53,7 @@ export default function Films({
       </nav>
 
       <MoviesStatus movies={movies} onRetry={onRetry} />
-      {movieID && shown?.length === 0 && (
+      {movieSlug && shown?.length === 0 && (
         <p className="none">
           That film isn't showing any more.{" "}
           <Link className="link" to="/">
@@ -60,7 +61,7 @@ export default function Films({
           </Link>
         </p>
       )}
-      {!movieID && movies?.length === 0 && (
+      {!movieSlug && movies?.length === 0 && (
         <p className="none">Nothing is showing in the next few days.</p>
       )}
 
@@ -79,9 +80,9 @@ export default function Films({
                 <span>{movie.title}</span>
               </div>
               <div>
-                {!movieID && (
+                {!movieSlug && (
                   <h2>
-                    <Link to={`/movies/${movie.movieID}`}>{movie.title}</Link>
+                    <Link to={`/movies/${slug(movie.title)}`}>{movie.title}</Link>
                   </h2>
                 )}
                 <p className="meta">
