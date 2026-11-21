@@ -305,12 +305,15 @@ a.back {
 :is(.film, .carousel li) h2 a {
   color: inherit;
   text-decoration: none;
+}
+
+.film h2 a {
   background: linear-gradient(currentColor, currentColor) left bottom / 0 0.08em no-repeat;
   transition: background-size 0.3s ease-out;
 
   &:hover,
   &:focus-visible,
-  :is(.film, .carousel li):has(a:hover) & {
+  .film:has(a:hover) & {
     background-size: 100% 0.08em;
   }
 }
@@ -451,11 +454,13 @@ a.back {
   list-style: none;
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  scroll-snap-type: x mandatory;
   scrollbar-width: none;
+  cursor: grab;
+  user-select: none;
+  mask-image: linear-gradient(to right, #000 92%, rgb(0 0 0 / 0.2));
 
-  @media (prefers-reduced-motion: no-preference) {
-    scroll-behavior: smooth;
+  &.dragging {
+    cursor: grabbing;
   }
 
   @media (max-width: 800px) {
@@ -465,10 +470,6 @@ a.back {
   @media (max-width: 600px) {
     --per: 1.9;
     --gap: 12px;
-  }
-
-  li {
-    scroll-snap-align: start;
   }
 
   .poster {
@@ -490,27 +491,6 @@ a.back {
     gap: 10px;
     margin: 8px 0 0;
     font-size: 0.875rem;
-  }
-}
-
-.carousel-nav {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 20px;
-
-  button {
-    width: 44px;
-    height: 44px;
-    border: 1px solid var(--line);
-    border-radius: 50%;
-    background: none;
-    font-size: 1.125rem;
-
-    &:hover {
-      border-color: var(--brass);
-      color: var(--brass);
-    }
   }
 }
 
