@@ -47,13 +47,15 @@ export default function Films({
         <h1 tabIndex={-1}>
           {movieSlug ? (shown?.[0]?.title ?? "Film") : "Now showing"}
         </h1>
-        <nav className="days" aria-label="Day">
-          {days.map((d, i) => (
-            <button key={i} aria-pressed={i === day} onClick={() => onDay(i)}>
-              {i === 0 ? "Today" : i === 1 ? "Tomorrow" : formatDay(d)}
-            </button>
-          ))}
-        </nav>
+        {movieSlug && (
+          <nav className="days" aria-label="Day">
+            {days.map((d, i) => (
+              <button key={i} aria-pressed={i === day} onClick={() => onDay(i)}>
+                {i === 0 ? "Today" : i === 1 ? "Tomorrow" : formatDay(d)}
+              </button>
+            ))}
+          </nav>
+        )}
 
         <MoviesStatus movies={movies} onRetry={onRetry} />
         {movieSlug && shown?.length === 0 && (
@@ -75,7 +77,17 @@ export default function Films({
             );
             return (
               <li key={movie.movieID} className="film">
-                <Poster movie={movie} />
+                {movieSlug ? (
+                  <Poster movie={movie} />
+                ) : (
+                  <Link
+                    to={`/movies/${slug(movie.title)}`}
+                    tabIndex={-1}
+                    aria-hidden="true"
+                  >
+                    <Poster movie={movie} />
+                  </Link>
+                )}
                 <div>
                   {!movieSlug && (
                     <h2>
@@ -90,7 +102,7 @@ export default function Films({
                     <span className="rating">{movie.rating}</span>
                   </p>
                   <p className="synopsis">{movie.synopsis}</p>
-                  {sessions.length ? (
+                  {!movieSlug ? null : sessions.length ? (
                     <div className="times">
                       {sessions.map((s) => (
                         <button
