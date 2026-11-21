@@ -5,6 +5,11 @@ type seatsRequest struct {
 	SeatIDs []string `json:"seatIDs" validate:"required,min=1,max=10,unique,dive,uuid"`
 }
 
+// holdResponse is how long the seats stay held. A duration rather than a time, so the client's clock doesn't matter.
+type holdResponse struct {
+	HoldSeconds int `json:"holdSeconds"`
+}
+
 // Booking is a confirmed booking. Ref is the short code shown on the ticket and in the email.
 type Booking struct {
 	BookingID string `json:"bookingID"`

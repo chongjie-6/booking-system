@@ -15,7 +15,8 @@ import (
 )
 
 // Hold holds the chosen seats for the signed-in user while they check out. Takes the request with the event ID in the path
-// and a seatsRequest body; responds 200, or 400 bad body, 404 no upcoming showing, 409 seat booked or held by someone else, 500.
+// and a seatsRequest body; responds 200 with a holdResponse, or 400 bad body, 404 no upcoming showing,
+// 409 seat booked or held by someone else, 500.
 func Hold(w http.ResponseWriter, r *http.Request) {
 	var req seatsRequest
 	if err := response.Bind(r, &req); err != nil {
@@ -31,7 +32,7 @@ func Hold(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, err)
 		return
 	}
-	response.Ok(w, nil, nil)
+	response.Ok(w, holdResponse{int(holdTTL.Seconds())}, nil)
 }
 
 // Release drops the signed-in user's holds on the seats, e.g. when they go back to change seats.
