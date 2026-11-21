@@ -115,6 +115,11 @@ p {
   text-decoration: none;
 }
 
+/* Reserve the scrollbar's space so hiding it while the drawer is open doesn't shift the page. */
+html {
+  scrollbar-gutter: stable;
+}
+
 body:has(.drawer[open]) {
   overflow: hidden;
 }

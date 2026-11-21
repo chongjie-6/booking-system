@@ -39,6 +39,7 @@ export default function App() {
   const navigationType = useNavigationType();
   const entry = location.state as Entry | null;
   const [signingIn, setSigningIn] = useState(!!resetToken);
+  const [drawerOpens, setDrawerOpens] = useState(0);
   const [day, setDay] = useState(0);
   // undefined while loading, null if it failed
   const [movies, setMovies] = useState<Movie[] | null>();
@@ -128,7 +129,11 @@ export default function App() {
           </div>
         ) : (
           user === null && (
-            <button className="link signin" onClick={() => setSigningIn(true)}>
+            <button className="link signin" onClick={() => {
+                setDrawerOpens((n) => n + 1);
+                setSigningIn(true);
+              }}
+            >
               <svg
                 width="20"
                 height="20"
@@ -150,7 +155,9 @@ export default function App() {
 
       {user === null && (
         <Drawer open={signingIn} onClose={() => setSigningIn(false)}>
+          {/* Remounted on each open so it starts on sign in; not on close, so it doesn't change mid slide-out. */}
           <Auth
+            key={drawerOpens}
             mode={resetToken ? "reset" : "login"}
             resetToken={resetToken}
             onSignedIn={(u) => {
