@@ -23,7 +23,8 @@ import { Drawer } from "@/components/Drawer";
 import { MoviesStatus } from "@/components/MoviesStatus";
 import Checkout from "@/app/sessions/[eventID]/checkout/page";
 import Done from "@/app/bookings/[ref]/page";
-import Films from "@/app/page";
+import Home from "@/app/page";
+import Films from "@/app/movies/page";
 import SeatPicker from "@/app/sessions/[eventID]/page";
 import { useTitle, type Entry } from "@/lib/routes";
 
@@ -172,7 +173,11 @@ export default function App() {
         <Navigate to="/" replace />
       ) : (
         <Routes>
-          {["/", "/movies/:movie"].map((path) => (
+          <Route
+            path="/"
+            element={<Home movies={movies} onRetry={retryMovies} />}
+          />
+          {["/movies", "/movies/:movie"].map((path) => (
             <Route
               key={path}
               path={path}
