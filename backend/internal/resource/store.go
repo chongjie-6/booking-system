@@ -11,7 +11,7 @@ import (
 // frontend's today, tomorrow and the day after in any time zone. Takes a context; returns the movies (by title) or the database error.
 func dbListMovies(ctx context.Context) ([]Movie, error) {
 	rows, _ := db.Pool.Query(ctx, `
-	SELECT m.movie_id, m.title, m.genre, m.runtime_minutes, m.rating, m.synopsis,
+	SELECT m.movie_id, m.title, m.genre, m.runtime_minutes, m.rating, m.synopsis, COALESCE(m.poster_path, '') AS poster_path,
 	json_agg(json_build_object(
 		'eventID', e.event_id, 'startsAt', e.starts_at, 'priceCents', e.price_cents, 'room', r.name
 	) ORDER BY e.starts_at) AS showings
@@ -37,4 +37,31 @@ func dbListSeats(ctx context.Context, eventID string) ([]Seat, error) {
 	ORDER BY s.row_label, s.seat_number
 	`, pgx.NamedArgs{"event_id": eventID})
 	return pgx.CollectRows(rows, pgx.RowToStructByName[Seat])
+}
+
+// dbUnfetchedMovies finds movies with a TMDB ID whose details haven't been fetched yet. Takes a context;
+// returns their TMDB IDs keyed by movie ID, or the database error.
+func dbUnfetchedMovies(ctx context.Context) (map[string]int, error) {
+	rows, _ := db.Pool.Query(ctx, `SELECT movie_id, tmdb_id FROM movies WHERE tmdb_id IS NOT NULL AND poster_path IS NULL`)
+	ids := map[string]int{}
+	var movieID string
+	var tmdbID int
+	_, err := pgx.ForEachRow(rows, []any{&movieID, &tmdbID}, func() error {
+		ids[movieID] = tmdbID
+		return nil
+	})
+	return ids, err
+}
+
+// dbSetTMDB saves a movie's TMDB details, keeping the seeded synopsis or runtime where TMDB has none.
+// Takes a context, the movie ID and the details; returns the database error.
+func dbSetTMDB(ctx context.Context, movieID string, m tmdbMovie) error {
+	_, err := db.Pool.Exec(ctx, `
+	UPDATE movies SET
+		synopsis = COALESCE(NULLIF(@overview::text, ''), synopsis),
+		runtime_minutes = COALESCE(NULLIF(@runtime::int, 0), runtime_minutes),
+		poster_path = @poster
+	WHERE movie_id = @movie_id
+	`, pgx.NamedArgs{"overview": m.Overview, "runtime": m.Runtime, "poster": m.PosterPath, "movie_id": movieID})
+	return err
 }

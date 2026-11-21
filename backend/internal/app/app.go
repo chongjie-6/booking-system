@@ -5,6 +5,7 @@ import (
 	"booking-system/internal/auth"
 	"booking-system/internal/notification"
 	"booking-system/internal/outbox"
+	"booking-system/internal/resource"
 	"booking-system/pkg/db"
 	"booking-system/pkg/email"
 	"booking-system/pkg/geoip"
@@ -42,7 +43,7 @@ func Middleware(h http.Handler) http.Handler {
 	return middleware.Logger(h)
 }
 
-// Serve starts the outbox and token pruners and the notification consumer and serves r until Ctrl+C or SIGTERM, then shuts down gracefully.
+// Serve starts the outbox and token pruners, the notification consumer and the TMDB filler, and serves r until Ctrl+C or SIGTERM, then shuts down gracefully.
 // Outbox events are sent to Kafka by Debezium, not by this process. Takes a parent context and the handler; returns once shutdown has finished.
 func Serve(ctx context.Context, h http.Handler) {
 	sig, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
@@ -53,6 +54,7 @@ func Serve(ctx context.Context, h http.Handler) {
 	consumers.Go(func() { outbox.Prune(sig) })
 	consumers.Go(func() { auth.PruneTokens(sig) })
 	consumers.Go(func() { notification.Consume(sig) })
+	consumers.Go(func() { resource.FillFromTMDB(sig) })
 
 	srv := &http.Server{Addr: ":" + cmp.Or(os.Getenv("PORT"), "8080"), Handler: h}
 	go func() {

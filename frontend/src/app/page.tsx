@@ -3,6 +3,7 @@ import {
   formatDay,
   formatTime,
   hue,
+  posterURL,
   slug,
   showtimesFor,
   upcomingDays,
@@ -77,7 +78,11 @@ export default function Films({
                 style={{ "--hue": hue(movie.movieID) } as CSSProperties}
                 aria-hidden="true"
               >
-                <span>{movie.title}</span>
+                {movie.posterPath ? (
+                  <img src={posterURL(movie.posterPath)} alt="" loading="lazy" />
+                ) : (
+                  <span>{movie.title}</span>
+                )}
               </div>
               <div>
                 {!movieSlug && (

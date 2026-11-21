@@ -1,4 +1,4 @@
--- Dev data: 5 films, 3 screens of 8 rows x 14 seats, and a week of showings from today (Sydney time).
+-- Dev data: 5 films (details and posters filled from TMDB when TMDB_TOKEN is set), 3 screens of 8 rows x 14 seats, and a week of showings from today (Sydney time).
 -- Wipes all movies, rooms, showings and bookings first, so re-run it to move the showings forward. Never run it on production.
 -- Run after the server has applied the migrations once (Git Bash):
 --   docker compose exec -T postgres psql -U booking -d booking < backend/seed.sql
@@ -19,25 +19,25 @@ SELECT r.room_id, row_label, n,
 FROM rooms r, unnest(string_to_array('A,B,C,D,E,F,G,H', ',')) AS row_label, generate_series(1, 14) AS n;
 
 -- Times are picked so showings in the same room never overlap.
-WITH m (title, genre, runtime, rating, synopsis, room, times) AS (VALUES
-    ('The Long Quiet', 'Drama', 128, 'M',
-     'A lighthouse keeper sees out her last winter on an island the ferry no longer visits.',
+WITH m (title, tmdb_id, genre, runtime, rating, synopsis, room, times) AS (VALUES
+    ('Parasite', 496243, 'Thriller', 133, 'MA15+',
+     'A family scraping by in a basement flat talks its way, one job at a time, into a rich household.',
      'Screen 1', ARRAY['11:00', '13:45', '16:30']),
-    ('Last Train North', 'Science fiction', 141, 'M',
-     'The final train out of a frozen city is carrying one passenger too many.',
+    ('Interstellar', 157336, 'Science fiction', 169, 'M',
+     'With crops failing on Earth, a former pilot leads a crew through a wormhole to look for a new home.',
      'Screen 1', ARRAY['19:00', '22:00']),
-    ('Saltwater Kids', 'Animation', 88, 'G',
-     'A crab who hates getting wet joins the reef swimming team.',
+    ('Toy Story', 862, 'Animation', 81, 'G',
+     'A pull-string cowboy and a new space ranger toy compete to be their boy''s favourite.',
      'Screen 2', ARRAY['09:30', '13:30']),
-    ('Kite Season', 'Comedy', 97, 'PG',
-     'Two rival kite makers are forced to share one stall at the county fair.',
+    ('The Grand Budapest Hotel', 120467, 'Comedy', 100, 'M',
+     'A celebrated concierge and his lobby boy are drawn into a theft and a fight over a family fortune.',
      'Screen 2', ARRAY['11:15', '15:30', '18:20']),
-    ('The Reservoir', 'Thriller', 112, 'MA15+',
-     'A salvage diver finds a sealed car at the bottom of the reservoir. Someone wants it left there.',
+    ('The Dark Knight', 155, 'Action', 152, 'M',
+     'Batman, a police lieutenant and a new district attorney take on a criminal who wants Gotham in chaos.',
      'Screen 3', ARRAY['14:00', '17:45', '21:30'])
 ), movie AS (
-    INSERT INTO movies (title, genre, runtime_minutes, rating, synopsis)
-    SELECT title, genre, runtime, rating, synopsis FROM m
+    INSERT INTO movies (title, tmdb_id, genre, runtime_minutes, rating, synopsis)
+    SELECT title, tmdb_id, genre, runtime, rating, synopsis FROM m
     RETURNING movie_id, title
 )
 INSERT INTO events (movie_id, room_id, price_cents, starts_at)

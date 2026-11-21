@@ -10,6 +10,7 @@ type Movie struct {
 	RuntimeMinutes int       `db:"runtime_minutes" json:"runtimeMinutes"`
 	Rating         string    `db:"rating" json:"rating"`
 	Synopsis       string    `db:"synopsis" json:"synopsis"`
+	PosterPath     string    `db:"poster_path" json:"posterPath"` // TMDB poster, e.g. /abc.jpg; "" until fetched or if there is none
 	Showings       []Showing `db:"showings" json:"showings"`
 }
 

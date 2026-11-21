@@ -246,6 +246,11 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       )}
+      <footer className="credits">
+        Film details and posters from{" "}
+        <a className="link" href="https://www.themoviedb.org">TMDB</a>. This product
+        uses the TMDB API but is not endorsed or certified by TMDB.
+      </footer>
     </>
   );
 }

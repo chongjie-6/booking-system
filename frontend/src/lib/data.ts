@@ -8,6 +8,7 @@ export type Movie = {
   runtimeMinutes: number
   rating: string
   synopsis: string
+  posterPath: string // TMDB image path, '' when there's none
   showings: Showing[]
 }
 
@@ -45,7 +46,9 @@ export function findShowtime(movies: Movie[], eventID: string): Showtime | undef
   }
 }
 
-// Posters are drawn, not images, so each film gets a stable colour from its ID.
+export const posterURL = (path: string) => `https://image.tmdb.org/t/p/w342${path}`
+
+// Films without a TMDB poster get a drawn one, in a stable colour from the film's ID.
 export function hue(movieID: string): number {
   let h = 0
   for (const ch of movieID) h = (h * 31 + ch.charCodeAt(0)) % 360
