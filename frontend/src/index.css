@@ -495,6 +495,10 @@ a.back {
   color: var(--ink);
   font-size: calc(var(--seat-size) * 0.42);
   font-weight: 700;
+
+  &[data-type='wheelchair']:not([aria-pressed='true']) {
+    font-size: calc(var(--seat-size) * 0.7);
+  }
   transition:
     background-color 0.15s,
     transform 0.15s ease-out;
@@ -554,6 +558,10 @@ a.back {
   color: var(--ink);
   font-size: 0.75rem;
   line-height: 1;
+
+  &[data-type='wheelchair'] {
+    font-size: 1rem;
+  }
 
   &.selected {
     background: var(--brass);
