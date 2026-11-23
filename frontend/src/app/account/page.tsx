@@ -5,7 +5,7 @@ import { Auth, Field } from "@/components/Auth";
 import { Status } from "@/components/Status";
 import { useForm } from "@/lib/form";
 import { Ticket } from "@/components/Ticket";
-import { splitBookings, type UserBooking } from "@/lib/data";
+import { canCancel, splitBookings, ticketShowtime, type UserBooking } from "@/lib/data";
 import { useTitle } from "@/lib/routes";
 
 export default function Account({
@@ -46,12 +46,19 @@ export default function Account({
 
 function Bookings() {
   // undefined while loading, null if it failed
-  const [bookings, setBookings] = useState<ReturnType<typeof splitBookings> | null>();
+  // now is when they loaded, which decides what's upcoming and what can still be cancelled.
+  const [bookings, setBookings] = useState<(ReturnType<typeof splitBookings> & { now: number }) | null>();
   const [attempt, setAttempt] = useState(0);
+  const [cancelling, setCancelling] = useState("");
+  const [cancelError, setCancelError] = useState("");
+  const [cancelled, setCancelled] = useState("");
 
   useEffect(() => {
     api.get<UserBooking[]>("/bookings").then(
-      (b) => setBookings(splitBookings(b ?? [], Date.now())),
+      (b) => {
+        const now = Date.now();
+        setBookings({ ...splitBookings(b ?? [], now), now });
+      },
       () => setBookings(null),
     );
   }, [attempt]);
@@ -78,14 +85,31 @@ function Bookings() {
       </p>
     );
 
-  const { upcoming, past } = bookings;
+  const { upcoming, past, now } = bookings;
+
+  async function cancel(b: UserBooking) {
+    if (!confirm(`Cancel your booking for ${b.title}? Your seats will be freed and you'll get a full refund.`)) return;
+    setCancelling(b.bookingID);
+    setCancelError("");
+    setCancelled("");
+    try {
+      await api.del(`/bookings/${b.bookingID}`);
+      setCancelled(`Your booking for ${b.title} is cancelled. The refund takes 5 to 10 days to reach your card.`);
+      setAttempt((a) => a + 1);
+    } catch (err) {
+      setCancelError((err as Error).message);
+    } finally {
+      setCancelling("");
+    }
+  }
 
   return (
     <>
       <section>
         <h2>Upcoming</h2>
+        <Status error={cancelError} notice={cancelled} />
         {upcoming.length ? (
-          <BookingList bookings={upcoming} />
+          <BookingList bookings={upcoming} now={now} cancelling={cancelling} onCancel={cancel} />
         ) : (
           <p className="none">
             No upcoming bookings.{" "}
@@ -98,28 +122,36 @@ function Bookings() {
       {past.length > 0 && (
         <section>
           <h2>Past</h2>
-          <BookingList bookings={past} past />
+          <BookingList bookings={past} now={now} past />
         </section>
       )}
     </>
   );
 }
 
-function BookingList({ bookings, past }: { bookings: UserBooking[]; past?: boolean }) {
+function BookingList({
+  bookings,
+  now,
+  past,
+  cancelling,
+  onCancel,
+}: {
+  bookings: UserBooking[];
+  now: number;
+  past?: boolean;
+  cancelling?: string;
+  onCancel?: (b: UserBooking) => void;
+}) {
   return (
     <ul className={past ? "bookings past" : "bookings"}>
       {bookings.map((b) => (
         <li key={b.bookingID}>
-          <Ticket
-            showtime={{
-              movie: { title: b.title },
-              start: new Date(b.startsAt),
-              priceCents: b.priceCents,
-              room: b.room,
-            }}
-            seats={b.seats}
-            bookingRef={b.ref}
-          />
+          <Ticket showtime={ticketShowtime(b)} seats={b.seats} bookingRef={b.ref} />
+          {onCancel && canCancel(b, now) && (
+            <button className="link" onClick={() => onCancel(b)} disabled={!!cancelling}>
+              {cancelling === b.bookingID ? "Cancelling…" : `Cancel booking ${b.ref}`}
+            </button>
+          )}
         </li>
       ))}
     </ul>

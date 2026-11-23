@@ -7,6 +7,18 @@ type seatsRequest struct {
 	SeatIDs []string `json:"seatIDs" validate:"required,min=1,max=10,unique,dive,uuid"`
 }
 
+// bookRequest names the Stripe payment to book seats with; the seats come from the payment's metadata.
+type bookRequest struct {
+	PaymentIntentID string `json:"paymentIntentID" validate:"required,startswith=pi_,max=255"`
+}
+
+// paymentResponse is what the checkout page needs to show Stripe's card form and take the payment.
+type paymentResponse struct {
+	ClientSecret   string `json:"clientSecret"`
+	PublishableKey string `json:"publishableKey"`
+	AmountCents    int    `json:"amountCents"`
+}
+
 // holdResponse is how long the seats stay held. A duration rather than a time, so the client's clock doesn't matter.
 type holdResponse struct {
 	HoldSeconds int `json:"holdSeconds"`
@@ -18,10 +30,18 @@ type Booking struct {
 	Ref       string `json:"ref"`
 }
 
-// freeSeats is how many of the asked-for seats a showing can still sell, and the showing's room.
+// freeSeats is how many of the asked-for seats a showing can still sell, with the showing's room and seat price.
 type freeSeats struct {
-	RoomID string `db:"room_id"`
-	Free   int    `db:"free"`
+	RoomID     string `db:"room_id"`
+	PriceCents int    `db:"price_cents"`
+	Free       int    `db:"free"`
+}
+
+// lockedBooking is a booking being cancelled: its payment (nil if it was made before payments) and whether the
+// showing is still far enough off to cancel.
+type lockedBooking struct {
+	PaymentIntentID *string `db:"payment_intent_id"`
+	Cancellable     bool    `db:"cancellable"`
 }
 
 // UserBooking is one of the signed-in user's bookings (GET /bookings), with what its ticket shows.

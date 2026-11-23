@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { findShowtime, seatLabel, showtimesFor, slug, splitBookings, total, type Movie, type UserBooking } from "./data";
+import {
+  canCancel,
+  findShowtime,
+  seatLabel,
+  showtimesFor,
+  slug,
+  splitBookings,
+  total,
+  type Movie,
+  type UserBooking,
+} from "./data";
 
 const movie = (showings: Movie["showings"]): Movie => ({
   movieID: "m1",
@@ -54,6 +64,13 @@ describe("data", () => {
     expect(findShowtime([m], "b")?.room).toBe("Screen 2");
     expect(findShowtime([m], "missing")).toBeUndefined();
     expect(showtimesFor(m, new Date(2026, 5, 1)).map((s) => s.id)).toEqual(["a"]);
+  });
+
+  it("allows cancelling until an hour before the showing", () => {
+    const now = Date.parse("2026-06-01T12:00:00Z");
+    expect(canCancel({ startsAt: "2026-06-01T13:00:01Z" }, now)).toBe(true);
+    expect(canCancel({ startsAt: "2026-06-01T13:00:00Z" }, now)).toBe(false);
+    expect(canCancel({ startsAt: "2026-05-31T13:00:00Z" }, now)).toBe(false);
   });
 
   it("formats seats and totals", () => {

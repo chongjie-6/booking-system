@@ -84,6 +84,16 @@ export function splitBookings(bookings: UserBooking[], now: number) {
   return { upcoming, past }
 }
 
+export const ticketShowtime = (b: UserBooking): TicketShowtime => ({
+  movie: { title: b.title },
+  start: new Date(b.startsAt),
+  priceCents: b.priceCents,
+  room: b.room,
+})
+
+// Matches the backend: bookings can be cancelled and refunded up to an hour before the showing.
+export const canCancel = (b: Pick<UserBooking, 'startsAt'>, now: number) => Date.parse(b.startsAt) - now > 60 * 60 * 1000
+
 export const seatLabel = (s: SeatPlace) => `${s.row}${s.number}`
 export const total = (showtime: Pick<Showtime, 'priceCents'>, seats: number) => money.format((showtime.priceCents * seats) / 100)
 

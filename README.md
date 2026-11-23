@@ -7,8 +7,8 @@ Go backend and a React frontend.
 ```
 backend/      Go module (`booking-system`), one server
   cmd/          main.go, the server entry point
-  internal/     feature code: auth, booking, notification, payment, resource, user, plus router
-  pkg/          shared helpers: auth (JWT, passwords), db, rdb (Redis), geoip, middleware, response
+  internal/     feature code: auth, booking (with payments), notification, outbox, resource, user, plus router
+  pkg/          shared helpers: auth (JWT, passwords), db, rdb (Redis), geoip, middleware, response, stripe
   migrations/   SQL migrations, applied on startup
 frontend/     React + TypeScript + Vite app
 ```
@@ -30,6 +30,8 @@ Settings come from environment variables, or from `backend/.env` (gitignored), w
 | `GEOIP_DB_PATH` | no | See [IP country database](#ip-country-database) |
 | `TMDB_TOKEN` | no | [TMDB](https://www.themoviedb.org/settings/api) API read access token. Within a minute of seeding, films with a TMDB ID get TMDB's synopsis, runtime, poster, backdrop and YouTube trailer; without it they keep the seed's text and a drawn poster. TMDB's API is free for non-commercial use, and its terms require the credit in the page footer |
 | `TRUST_PROXY` | no | `true` to take the client IP (for rate limits and login alerts) from `X-Real-IP`. Set it only when every request comes through a proxy that overwrites that header, like the frontend image's nginx; otherwise clients could forge it |
+| `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY` | for booking | Stripe API keys (`sk_test_...`, `pk_test_...`). Without them checkout says payments aren't available. See [Payments](#payments) |
+| `STRIPE_WEBHOOK_SECRET` | for booking | Signing secret (`whsec_...`) of the webhook that sends `payment_intent.succeeded` to `/payments/webhook` |
 | `RESEND_API_KEY`, `EMAIL_FROM` | no | [Resend](https://resend.com) key and sender for login alerts and password reset emails; without them no emails are sent |
 
 `docker-compose.yml` runs Postgres 18, Redis, Kafka and Kafka Connect (Debezium) locally; its header lists the matching settings. If you already run one of them, start only the others, e.g. `docker compose up -d redis kafka connect connect-init`.
@@ -93,6 +95,16 @@ docker compose --profile app up -d --build
 
 and open http://localhost:8081. Compose points the backend at its own Postgres, Redis and Kafka, so the connection settings in `.env` are overridden. It waits for Postgres to be healthy before starting the backend, and restarts the backend if it exits. Load the seed as above.
 
+### Payments
+
+Checkout takes card payments through [Stripe](https://stripe.com), in test mode during development (free, no real money). Put the test keys from the Stripe dashboard in `backend/.env`. The checkout page gets the publishable key from the backend, so the frontend needs no setting. To receive webhooks locally, run the [Stripe CLI](https://stripe.com/docs/stripe-cli), which prints the `STRIPE_WEBHOOK_SECRET` to use:
+
+```sh
+stripe listen --events payment_intent.succeeded --forward-to localhost:8080/payments/webhook   # or localhost:8081 for the Docker stack
+```
+
+Pay with the test card `4242 4242 4242 4242`, any future expiry and any CVC. In production, add the webhook endpoint in the dashboard instead.
+
 ### IP country database
 
 Login alerts fire when a user logs in from a new browser, or from an IP that's on a new network and in a new country for them. The country data comes from the free [DB-IP Lite](https://db-ip.com/db/download/ip-to-country-lite) database, which is gitignored. Download it (Git Bash), and again each month for updates:
@@ -108,13 +120,17 @@ Stop the server before replacing the file, and start it again afterwards. Set `G
 
 ### Design decisions
 
-**Seat holds live in Redis, and booking keeps working when Redis is down.** Reaching checkout holds the chosen seats in Redis for 10 minutes, one key per seat, while the user pays (`PUT /events/{id}/hold`; going back releases them with `DELETE`). Seats someone else holds show as taken on the seat map. There's no payment provider yet, so `POST /events/{id}/bookings` confirms without charging. A `bookings` row is only written once payment succeeds, so every row is a paid booking. If Redis is unreachable, booking skips the hold instead of failing: two users can then both reach checkout and pay for the same seat. Postgres still allows only one of them to keep it (`booking_seats` is unique on `(event_id, seat_id)`), so the second payment's insert fails and that payment is refunded. We accept the occasional refund during a Redis outage over having booking go down with Redis.
+**Seat holds live in Redis, and booking keeps working when Redis is down.** Reaching checkout holds the chosen seats in Redis for 10 minutes, one key per seat, while the user pays (`PUT /events/{id}/hold`; going back releases them with `DELETE`). Seats someone else holds show as taken on the seat map. A `bookings` row is only written once payment succeeds, so every row is a paid booking. If Redis is unreachable, booking skips the hold instead of failing: two users can then both reach checkout and pay for the same seat. Postgres still allows only one of them to keep it (`booking_seats` is unique on `(event_id, seat_id)`), so the second payment's insert fails and that payment is refunded. We accept the occasional refund during a Redis outage over having booking go down with Redis.
+
+**A payment is booked by whichever arrives first: the checkout page or Stripe's webhook.** `POST /events/{id}/payment` starts a Stripe PaymentIntent for exactly the chosen seats, which go in its metadata. Once Stripe takes the payment, the page calls `POST /events/{id}/bookings`, and Stripe also sends `payment_intent.succeeded`, so a buyer who closes the tab straight after paying still gets their booking. Both look the payment up at Stripe and make the booking from its metadata, and `bookings.payment_intent_id` is unique, so the second one finds the booking already made. If the booking can't be made (a seat sold meanwhile, the showing started, the price changed), the payment is refunded, and a refunded payment is never booked later.
+
+**Bookings can be cancelled up to an hour before the showing, for a full refund.** `DELETE /bookings/{id}` locks the booking, refunds it at Stripe, then deletes it, which frees its seats; if the refund fails, the booking stays.
 
 **Login and reset emails have their own rate limit.** On top of the app-wide limit, `POST /auth/login` and `POST /auth/password/forgot` allow 5 tries per IP, refilled one a minute. **Reset tokens are made when the email is sent**, in the notification consumer, so the raw token never sits in the outbox or Kafka. A link works once, for an hour, and using it signs out every session.
 
 ## Frontend
 
-In dev, Vite forwards `/auth`, `/user`, `/movies`, `/events` and `/bookings` to the backend on `localhost:8080` (see `vite.config.ts`), so the page and API share an origin and the auth cookies need no CORS. Add each new API path prefix there. `src/lib/api.ts` wraps `fetch`: when the 15-minute access token has expired it calls `/auth/refresh` once and retries.
+In dev, Vite forwards `/auth`, `/user`, `/movies`, `/events`, `/bookings` and `/payments` to the backend on `localhost:8080` (see `vite.config.ts`), so the page and API share an origin and the auth cookies need no CORS. Add each new API path prefix there. `src/lib/api.ts` wraps `fetch`: when the 15-minute access token has expired it calls `/auth/refresh` once and retries.
 
 ```sh
 cd frontend
@@ -125,4 +141,6 @@ npm run lint
 npm test         # vitest
 ```
 
-Signed-in users reach `/account` from their name in the header: their bookings (`GET /bookings`), their details (`PATCH /user`) and a password change (`POST /auth/password`).
+On Windows, run the tests from a path with an upper-case drive letter (`C:\...`, as PowerShell gives). Vitest loads itself twice from a lower-case `c:\...` path, as some editor terminals give, and every test file then fails in `describe`.
+
+Signed-in users reach `/account` from their name in the header: their bookings (`GET /bookings`), which they can cancel up to an hour before (`DELETE /bookings/{id}`), their details (`PATCH /user`) and a password change (`POST /auth/password`). The confirmation page at `/bookings/{ref}` fetches the booking (`GET /bookings/{ref}`) when it's opened from a link rather than straight after booking.

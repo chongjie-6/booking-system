@@ -51,7 +51,7 @@ func TestListUserBookings(t *testing.T) {
 		for i, l := range seatLabels {
 			ids[i] = seats[l]
 		}
-		if _, err := dbCreateBooking(ctx, tx, eventID, room, userID, ids); err != nil {
+		if _, err := dbCreateBooking(ctx, tx, eventID, room, userID, ids, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -59,7 +59,7 @@ func TestListUserBookings(t *testing.T) {
 	book(later, alice, "A2")
 	book(soon, bob, "A2")
 
-	got, err := dbListUserBookings(ctx, tx, alice)
+	got, err := dbListUserBookings(ctx, tx, alice, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestListUserBookings(t *testing.T) {
 		t.Errorf("seats = %v, want A1 then A3", b.Seats)
 	}
 
-	if got, err := dbListUserBookings(ctx, tx, one(`SELECT uuidv7()::text`)); err != nil || got == nil || len(got) != 0 {
+	if got, err := dbListUserBookings(ctx, tx, one(`SELECT uuidv7()::text`), ""); err != nil || got == nil || len(got) != 0 {
 		t.Errorf("no bookings = %v, %v; want an empty, non-nil slice so the API sends []", got, err)
 	}
 }

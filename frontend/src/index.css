@@ -917,6 +917,11 @@ body {
   gap: 12px;
 }
 
+/* Stripe's card form; it sizes itself once loaded. */
+.card:empty {
+  display: none;
+}
+
 .rule {
   margin-top: 6px;
   color: var(--muted);
@@ -1078,6 +1083,12 @@ body {
   margin: 0;
   padding: 0;
   list-style: none;
+
+  li {
+    display: grid;
+    gap: 8px;
+    justify-items: start;
+  }
 
   &.past .ticket {
     opacity: 0.6;

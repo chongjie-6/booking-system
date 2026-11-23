@@ -75,27 +75,29 @@ func Holders(ctx context.Context, eventID string, seatIDs []string) []string {
 	return holders
 }
 
-// dbFreeSeats counts the seats in seatIDs that are in the showing's room and not booked yet.
+// dbFreeSeats counts the seats in seatIDs that are in the showing's room and not booked yet, with the room and seat price.
 // Returns pgx.ErrNoRows if there's no showing with that ID still to start.
 func dbFreeSeats(ctx context.Context, q db.Querier, eventID string, seatIDs []string) (freeSeats, error) {
 	rows, _ := q.Query(ctx, `
-	SELECT e.room_id, count(s.seat_id) FILTER (WHERE bs.seat_id IS NULL) AS free
+	SELECT e.room_id, e.price_cents, count(s.seat_id) FILTER (WHERE bs.seat_id IS NULL) AS free
 	FROM events e
 	LEFT JOIN seats s ON s.room_id = e.room_id AND s.seat_id = ANY(@seat_ids::uuid[])
 	LEFT JOIN booking_seats bs ON bs.event_id = e.event_id AND bs.seat_id = s.seat_id
 	WHERE e.event_id = @event_id AND e.starts_at > now()
-	GROUP BY e.room_id
+	GROUP BY e.room_id, e.price_cents
 	`, pgx.NamedArgs{"event_id": eventID, "seat_ids": seatIDs})
 	return pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[freeSeats])
 }
 
-// dbCreateBooking inserts a booking and its seats. Takes the transaction, showing, its room, user and seats;
-// returns the new booking ID, or the database error (a 23505 on booking_seats if a seat was sold meanwhile).
-func dbCreateBooking(ctx context.Context, tx pgx.Tx, eventID, roomID, userID string, seatIDs []string) (string, error) {
+// dbCreateBooking inserts a booking and its seats. Takes the transaction, showing, its room, user, seats and the Stripe
+// payment ("" for none); returns the new booking ID, or the database error: a 23505 on booking_seats if a seat was sold
+// meanwhile, or on bookings_payment_intent_id_key if the payment is already booked.
+func dbCreateBooking(ctx context.Context, tx pgx.Tx, eventID, roomID, userID string, seatIDs []string, paymentIntentID string) (string, error) {
 	var bookingID string
 	err := tx.QueryRow(ctx, `
-	INSERT INTO bookings (event_id, user_id) VALUES (@event_id, @user_id) RETURNING booking_id
-	`, pgx.NamedArgs{"event_id": eventID, "user_id": userID}).Scan(&bookingID)
+	INSERT INTO bookings (event_id, user_id, payment_intent_id) VALUES (@event_id, @user_id, NULLIF(@payment_intent_id, ''))
+	RETURNING booking_id
+	`, pgx.NamedArgs{"event_id": eventID, "user_id": userID, "payment_intent_id": paymentIntentID}).Scan(&bookingID)
 	if err != nil {
 		return "", err
 	}
@@ -106,9 +108,32 @@ func dbCreateBooking(ctx context.Context, tx pgx.Tx, eventID, roomID, userID str
 	return bookingID, err
 }
 
+// dbBookingByPayment finds the booking a Stripe payment made. Takes a context, querier and intent ID;
+// returns the Booking, or pgx.ErrNoRows if the payment hasn't been booked.
+func dbBookingByPayment(ctx context.Context, q db.Querier, paymentIntentID string) (Booking, error) {
+	rows, _ := q.Query(ctx, `
+	SELECT booking_id, upper(right(booking_id::text, 8)) AS ref FROM bookings WHERE payment_intent_id = @payment_intent_id
+	`, pgx.NamedArgs{"payment_intent_id": paymentIntentID})
+	return pgx.CollectExactlyOneRow(rows, pgx.RowToStructByPos[Booking])
+}
+
+// dbLockBooking locks one of the user's bookings for cancelling, until the transaction ends. Takes the transaction,
+// booking ID, user ID, and the latest start time that can't be cancelled any more; returns the booking's payment and
+// whether its showing starts after cutoff, or pgx.ErrNoRows if the user has no such booking.
+func dbLockBooking(ctx context.Context, tx pgx.Tx, bookingID, userID string, cutoff time.Time) (lockedBooking, error) {
+	rows, _ := tx.Query(ctx, `
+	SELECT b.payment_intent_id, e.starts_at > @cutoff AS cancellable
+	FROM bookings b JOIN events e ON e.event_id = b.event_id
+	WHERE b.booking_id = @booking_id AND b.user_id = @user_id
+	FOR UPDATE OF b
+	`, pgx.NamedArgs{"booking_id": bookingID, "user_id": userID, "cutoff": cutoff})
+	return pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[lockedBooking])
+}
+
 // dbListUserBookings fetches the user's bookings, latest showing first, each with its film, screen, price and seats.
-// Ref is worked out as in Create. Takes a context, querier and user ID; returns the bookings or the database error.
-func dbListUserBookings(ctx context.Context, q db.Querier, userID string) ([]UserBooking, error) {
+// Ref is worked out as in refOf. Takes a context, querier, user ID and a ref to fetch just that booking ("" for all);
+// returns the bookings or the database error.
+func dbListUserBookings(ctx context.Context, q db.Querier, userID, ref string) ([]UserBooking, error) {
 	rows, _ := q.Query(ctx, `
 	SELECT b.booking_id, upper(right(b.booking_id::text, 8)) AS ref, e.event_id, m.title, e.starts_at,
 	r.name AS room, e.price_cents,
@@ -119,9 +144,9 @@ func dbListUserBookings(ctx context.Context, q db.Querier, userID string) ([]Use
 	JOIN rooms r ON r.room_id = e.room_id
 	JOIN booking_seats bs ON bs.booking_id = b.booking_id
 	JOIN seats s ON s.seat_id = bs.seat_id
-	WHERE b.user_id = @user_id
+	WHERE b.user_id = @user_id AND (@ref = '' OR upper(right(b.booking_id::text, 8)) = @ref)
 	GROUP BY b.booking_id, e.event_id, m.movie_id, r.room_id
 	ORDER BY e.starts_at DESC, b.booking_id DESC
-	`, pgx.NamedArgs{"user_id": userID})
+	`, pgx.NamedArgs{"user_id": userID, "ref": ref})
 	return pgx.CollectRows(rows, pgx.RowToStructByName[UserBooking])
 }
