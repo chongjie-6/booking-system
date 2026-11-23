@@ -3,9 +3,11 @@ package main
 import (
 	"booking-system/internal/app"
 	"booking-system/internal/router"
+	"booking-system/pkg/db"
 	"booking-system/pkg/response"
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -27,8 +29,14 @@ func main() {
 		response.Error(w, response.ErrNotFound)
 	})
 
-	// Health check route
-	r.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
+	// Health check: 503 while Postgres is unreachable. Redis and Kafka aren't checked, since the server keeps working without them.
+	r.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+		if err := db.Pool.Ping(ctx); err != nil {
+			response.JSON(w, http.StatusServiceUnavailable, map[string]string{"message": "database unreachable"})
+			return
+		}
 		response.JSON(w, http.StatusOK, map[string]string{"message": "OK"})
 	})
 
