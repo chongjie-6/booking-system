@@ -502,12 +502,43 @@ body {
 .hero {
   --hero-height: min(78svh, 640px);
   position: relative;
-  display: flex;
-  align-items: flex-end;
   height: var(--hero-height);
   margin: 0 calc(50% - 50vw) 40px;
   overflow: hidden;
   background: var(--curtain);
+
+  @media (max-width: 600px) {
+    --hero-height: min(70svh, 520px);
+  }
+}
+
+/* The current slide, flanked by its neighbours; vertical swipes still scroll the page. */
+.hero-track {
+  display: flex;
+  height: 100%;
+  touch-action: pan-y;
+  user-select: none;
+
+  .hero:has(.hero-nav) & {
+    cursor: grab;
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+
+  /* The carousel's 700ms ease-out cubic. */
+  &.settling {
+    transition: translate 0.7s cubic-bezier(0.33, 1, 0.68, 1);
+  }
+}
+
+.hero-slide {
+  position: relative;
+  display: flex;
+  flex: 0 0 100%;
+  align-items: flex-end;
+  overflow: hidden;
 
   &::after {
     content: '';
@@ -518,8 +549,19 @@ body {
       linear-gradient(to right, rgb(0 0 0 / 0.7), transparent 65%);
   }
 
-  @media (max-width: 600px) {
-    --hero-height: min(70svh, 520px);
+  /* Leaves room for the dots, which stay put while the slides move. */
+  .hero:has(.hero-nav) & .hero-body {
+    padding-bottom: 88px;
+  }
+}
+
+.hero > .hero-nav {
+  position: absolute;
+  inset: auto 0 0;
+  pointer-events: none;
+
+  button {
+    pointer-events: auto;
   }
 }
 
