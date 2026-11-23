@@ -1,7 +1,9 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState } from "react";
 import { Link } from "react-router";
-import { api, ApiError, type User } from "@/lib/api";
+import { api, type User } from "@/lib/api";
 import { Auth, Field } from "@/components/Auth";
+import { Status } from "@/components/Status";
+import { useForm } from "@/lib/form";
 import { Ticket } from "@/components/Ticket";
 import { splitBookings, type UserBooking } from "@/lib/data";
 import { useTitle } from "@/lib/routes";
@@ -124,31 +126,6 @@ function BookingList({ bookings, past }: { bookings: UserBooking[]; past?: boole
   );
 }
 
-// Submits a form's fields, tracking busy, error and success states. messages maps a status to friendlier text.
-function useForm(messages: Record<number, string>) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-
-  async function run(e: FormEvent<HTMLFormElement>, send: (f: Record<string, string>) => Promise<string>) {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const f = Object.fromEntries(new FormData(form)) as Record<string, string>;
-    setBusy(true);
-    setError("");
-    setNotice("");
-    try {
-      setNotice(await send(f));
-    } catch (err) {
-      setError((err instanceof ApiError && messages[err.status]) || (err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return { busy, error, notice, run };
-}
-
 function Details({ user, onUpdated }: { user: User; onUpdated: (u: User) => void }) {
   const { busy, error, notice, run } = useForm({ 409: "That email is already used by another account." });
 
@@ -217,22 +194,5 @@ function Password() {
         {busy ? "Saving…" : "Change password"}
       </button>
     </form>
-  );
-}
-
-function Status({ error, notice }: { error: string; notice: string }) {
-  return (
-    <>
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      {notice && (
-        <p className="hint" role="status">
-          {notice}
-        </p>
-      )}
-    </>
   );
 }
