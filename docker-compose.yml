@@ -96,6 +96,24 @@ services:
       TRUST_PROXY: "true"
     volumes: ["./backend/data:/app/data:ro"]
 
+  # Loads backend/seed.sql on every `up`, once the backend (air or the app profile) has migrated and made the tables.
+  # The seed wipes films, screens, showings and bookings; `docker compose logs seed`.
+  seed:
+    image: postgres:18
+    depends_on:
+      postgres: { condition: service_healthy }
+    volumes: ["./backend/seed.sql:/seed.sql:ro"]
+    environment:
+      PGHOST: postgres
+      PGUSER: booking
+      PGPASSWORD: booking
+      PGDATABASE: booking
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        until psql -qc 'SELECT 1 FROM events LIMIT 0' >/dev/null 2>&1; do echo "waiting for migrations"; sleep 2; done
+        psql -v ON_ERROR_STOP=1 -f /seed.sql
+
   frontend:
     profiles: [app]
     build: frontend
