@@ -4,6 +4,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -29,9 +30,13 @@ func (w *statusWriter) WriteHeader(status int) {
 	w.ResponseWriter.WriteHeader(status)
 }
 
-// ClientIP returns the IP of the connecting peer. Proxy headers like X-Forwarded-For are ignored, since any client can forge them.
+// ClientIP returns the IP of the connecting peer. Proxy headers are ignored, since any client can forge them, unless
+// TRUST_PROXY=true says every request comes through a proxy that sets X-Real-IP, like the frontend image's nginx.
 // Takes the request; returns the IP, or "" if RemoteAddr can't be parsed.
 func ClientIP(r *http.Request) string {
+	if ip := r.Header.Get("X-Real-IP"); ip != "" && os.Getenv("TRUST_PROXY") == "true" {
+		return ip
+	}
 	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
 	return ip
 }

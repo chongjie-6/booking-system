@@ -50,5 +50,29 @@ services:
       OFFSET_STORAGE_TOPIC: connect_offsets
       STATUS_STORAGE_TOPIC: connect_statuses
 
+  # The app itself, only with `docker compose --profile app up -d --build`; open http://localhost:8081.
+  # The backend reads the rest of its settings (JWT_PRIVATE_KEY, TMDB_TOKEN, ...) from backend/.env. Its port isn't
+  # published, so every request comes through nginx, which is what makes TRUST_PROXY safe.
+  backend:
+    profiles: [app]
+    build: backend
+    depends_on: [postgres, redis, kafka]
+    env_file:
+      - path: backend/.env
+        required: false
+    environment:
+      DATABASE_URL: postgres://booking:booking@postgres:5432/booking
+      REDIS_ADDRESS: redis:6379
+      KAFKA_ADDRESS: kafka:29092
+      ALLOWED_ORIGINS: http://localhost:8081
+      TRUST_PROXY: "true"
+    volumes: ["./backend/data:/app/data:ro"]
+
+  frontend:
+    profiles: [app]
+    build: frontend
+    depends_on: [backend]
+    ports: ["8081:80"]
+
 volumes:
   postgres:

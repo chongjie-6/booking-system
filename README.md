@@ -29,6 +29,7 @@ Settings come from environment variables, or from `backend/.env` (gitignored), w
 | `REDIS_ADDRESS`, `REDIS_PASSWORD` | no | Redis for rate limiting, e.g. `localhost:6379` |
 | `GEOIP_DB_PATH` | no | See [IP country database](#ip-country-database) |
 | `TMDB_TOKEN` | no | [TMDB](https://www.themoviedb.org/settings/api) API read access token. Within a minute of seeding, films with a TMDB ID get TMDB's synopsis, runtime, poster, backdrop and YouTube trailer; without it they keep the seed's text and a drawn poster. TMDB's API is free for non-commercial use, and its terms require the credit in the page footer |
+| `TRUST_PROXY` | no | `true` to take the client IP (for rate limits and login alerts) from `X-Real-IP`. Set it only when every request comes through a proxy that overwrites that header, like the frontend image's nginx; otherwise clients could forge it |
 | `RESEND_API_KEY`, `EMAIL_FROM` | no | [Resend](https://resend.com) key and sender for login alerts and password reset emails; without them no emails are sent |
 
 `docker-compose.yml` runs Postgres 18, Redis, Kafka and Kafka Connect (Debezium) locally; its header lists the matching settings. If you already run one of them, start only the others, e.g. `docker compose up -d redis kafka connect`. Then register the outbox connector, which sends outbox rows to Kafka (safe to re-run; the backend's migrations must have run once so the `outbox` table exists):
@@ -80,6 +81,16 @@ Tests that need Postgres (e.g. listing bookings) skip unless `DATABASE_URL` is s
 cd backend
 DATABASE_URL=postgres://booking:booking@localhost:5432/booking go test ./...
 ```
+
+### Docker
+
+`backend/Dockerfile` and `frontend/Dockerfile` build the server and an nginx image that serves the app and forwards API paths to the backend. To run the whole stack, put `JWT_PRIVATE_KEY` (and any optional keys) in `backend/.env`, then:
+
+```sh
+docker compose --profile app up -d --build
+```
+
+and open http://localhost:8081. Compose points the backend at its own Postgres, Redis and Kafka, so the connection settings in `.env` are overridden. Register the outbox connector and load the seed as above.
 
 ### IP country database
 
