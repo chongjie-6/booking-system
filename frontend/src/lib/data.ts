@@ -39,6 +39,14 @@ export type UserBooking = {
   seats: SeatPlace[]
 }
 
+// Shapes returned by GET /admin/movies and GET /admin/rooms. booked counts sold seats; a showing with any is locked.
+export type AdminShowing = { eventID: string; startsAt: string; priceCents: number; roomID: string; room: string; booked: number }
+export type AdminMovie = Pick<Movie, 'movieID' | 'title' | 'genre' | 'runtimeMinutes' | 'rating' | 'synopsis' | 'featured'> & {
+  tmdbID: number | null
+  showings: AdminShowing[]
+}
+export type Room = { roomID: string; name: string; capacity: number }
+
 // What a ticket needs, so it can show a booking from the API as well as a showtime being booked
 export type SeatPlace = Pick<Seat, 'row' | 'number'>
 export type TicketShowtime = Pick<Showtime, 'start' | 'priceCents' | 'room'> & { movie: Pick<Movie, 'title'> }
@@ -96,6 +104,12 @@ export const canCancel = (b: Pick<UserBooking, 'startsAt'>, now: number) => Date
 
 export const seatLabel = (s: SeatPlace) => `${s.row}${s.number}`
 export const total = (showtime: Pick<Showtime, 'priceCents'>, seats: number) => money.format((showtime.priceCents * seats) / 100)
+
+// An ISO time as a datetime-local input's value, in the browser's time zone, e.g. 2026-11-24T19:30.
+export function toLocalInput(iso: string) {
+  const d = new Date(iso)
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
+}
 
 export const money = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' })
 export const formatRuntime = (minutes: number) => `${Math.floor(minutes / 60)}h ${minutes % 60}m`

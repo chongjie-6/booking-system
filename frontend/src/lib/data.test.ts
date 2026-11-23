@@ -6,6 +6,7 @@ import {
   showtimesFor,
   slug,
   splitBookings,
+  toLocalInput,
   total,
   type Movie,
   type UserBooking,
@@ -71,6 +72,12 @@ describe("data", () => {
     expect(canCancel({ startsAt: "2026-06-01T13:00:01Z" }, now)).toBe(true);
     expect(canCancel({ startsAt: "2026-06-01T13:00:00Z" }, now)).toBe(false);
     expect(canCancel({ startsAt: "2026-05-31T13:00:00Z" }, now)).toBe(false);
+  });
+
+  it("round-trips a time through a datetime-local value", () => {
+    const iso = new Date(2026, 10, 24, 19, 30).toISOString();
+    expect(toLocalInput(iso)).toBe("2026-11-24T19:30");
+    expect(new Date(toLocalInput(iso)).toISOString()).toBe(iso);
   });
 
   it("formats seats and totals", () => {

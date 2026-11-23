@@ -29,6 +29,18 @@ func Auth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// Admin is Auth for staff: it also responds 403 unless the token's role is "admin". The role is read at sign in and
+// on each refresh, so a newly promoted user has it within 15 minutes. Takes the handler; returns it wrapped.
+func Admin(next http.HandlerFunc) http.HandlerFunc {
+	return Auth(func(w http.ResponseWriter, r *http.Request) {
+		if User(r).UserRole != "admin" {
+			response.Error(w, response.ErrForbidden)
+			return
+		}
+		next(w, r)
+	})
+}
+
 // User returns the signed-in user that Auth stored on the request. Takes the request; returns nil outside an Auth-wrapped handler.
 func User(r *http.Request) *auth.UserInfo {
 	u, _ := r.Context().Value(userKey{}).(*auth.UserInfo)

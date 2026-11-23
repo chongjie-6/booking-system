@@ -917,6 +917,44 @@ body {
   gap: 12px;
 }
 
+.fields select,
+.fields textarea {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--curtain);
+  color: var(--paper);
+  font: inherit;
+
+  &:focus-visible {
+    border-color: var(--brass);
+    outline-offset: 0;
+  }
+}
+
+/* A label above its control, for selects, textareas and date pickers, which can't hold a floating label. */
+.plain {
+  display: grid;
+  gap: 6px;
+
+  span {
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+}
+
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+
+  input {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--brass);
+  }
+}
+
 /* Stripe's card form; it sizes itself once loaded. */
 .card:empty {
   display: none;
@@ -1101,6 +1139,74 @@ body {
   gap: 48px;
   padding-top: 40px;
   border-top: 1px solid var(--curtain);
+}
+
+/* Admin */
+
+.admin {
+  display: grid;
+  gap: 40px;
+
+  section {
+    display: grid;
+    gap: 16px;
+  }
+
+  h3 {
+    margin: 12px 0 0;
+    font-size: 1rem;
+  }
+}
+
+.admin-film {
+  padding: 16px;
+  border: 1px solid var(--curtain);
+  border-radius: 6px;
+
+  summary {
+    cursor: pointer;
+    color: var(--muted);
+
+    strong {
+      color: var(--paper);
+    }
+  }
+}
+
+.admin-film-body {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.showings {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    gap: 8px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--curtain);
+  }
+
+  p {
+    margin: 0;
+  }
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+
+  p {
+    margin: 0;
+  }
 }
 
 /* Confirmation */

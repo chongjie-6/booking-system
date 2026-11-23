@@ -26,6 +26,7 @@ import Done from "@/app/bookings/[ref]/page";
 import Home from "@/app/page";
 import Films from "@/app/movies/page";
 import Account from "@/app/account/page";
+import Admin from "@/app/admin/page";
 import SeatPicker from "@/app/sessions/[eventID]/page";
 import { useTitle, type Entry } from "@/lib/routes";
 
@@ -123,6 +124,11 @@ export default function App() {
               <span className="error" role="alert">
                 Couldn't sign you out. Try again.
               </span>
+            )}
+            {user.userRole === "admin" && (
+              <Link className="link" to="/admin">
+                Admin
+              </Link>
             )}
             <Link className="link" to="/account">
               {user.firstName}
@@ -259,6 +265,10 @@ export default function App() {
             element={
               <Account user={user} onSignedIn={setUser} onUpdated={setUser} />
             }
+          />
+          <Route
+            path="/admin"
+            element={<Admin user={user} onSignedIn={setUser} onChanged={retryMovies} />}
           />
           <Route
             path="/bookings/:ref"

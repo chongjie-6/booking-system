@@ -7,7 +7,7 @@ Go backend and a React frontend.
 ```
 backend/      Go module (`booking-system`), one server
   cmd/          main.go, the server entry point
-  internal/     feature code: auth, booking (with payments), notification, outbox, resource, user, plus router
+  internal/     feature code: admin, auth, booking (with payments), notification, outbox, resource, user, plus router
   pkg/          shared helpers: auth (JWT, passwords), db, rdb (Redis), geoip, middleware, response, stripe
   migrations/   SQL migrations, applied on startup
 frontend/     React + TypeScript + Vite app
@@ -105,6 +105,16 @@ stripe listen --events payment_intent.succeeded --forward-to localhost:8080/paym
 
 Pay with the test card `4242 4242 4242 4242`, any future expiry and any CVC. In production, add the webhook endpoint in the dashboard instead.
 
+### Staff
+
+Staff manage films and showings at `/admin` (an **Admin** link appears in the header). Make an account staff with SQL; the role reaches its token at the next sign in or refresh, within 15 minutes:
+
+```sh
+docker compose exec postgres psql -U booking -d booking -c "UPDATE users SET user_role = 'admin' WHERE email = 'you@example.com'"
+```
+
+Screens and their seats are still set up with SQL, as in `backend/seed.sql`. A showing can't start while its screen is showing another film, and once a showing has sold seats it can't be changed or deleted.
+
 ### IP country database
 
 Login alerts fire when a user logs in from a new browser, or from an IP that's on a new network and in a new country for them. The country data comes from the free [DB-IP Lite](https://db-ip.com/db/download/ip-to-country-lite) database, which is gitignored. Download it (Git Bash), and again each month for updates:
@@ -130,7 +140,7 @@ Stop the server before replacing the file, and start it again afterwards. Set `G
 
 ## Frontend
 
-In dev, Vite forwards `/auth`, `/user`, `/movies`, `/events`, `/bookings` and `/payments` to the backend on `localhost:8080` (see `vite.config.ts`), so the page and API share an origin and the auth cookies need no CORS. Add each new API path prefix there. `src/lib/api.ts` wraps `fetch`: when the 15-minute access token has expired it calls `/auth/refresh` once and retries.
+In dev, Vite forwards `/auth`, `/user`, `/movies`, `/events`, `/bookings`, `/payments` and `/admin` to the backend on `localhost:8080` (see `vite.config.ts`), so the page and API share an origin and the auth cookies need no CORS. Add each new API path prefix there. `src/lib/api.ts` wraps `fetch`: when the 15-minute access token has expired it calls `/auth/refresh` once and retries.
 
 ```sh
 cd frontend
