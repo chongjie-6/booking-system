@@ -32,12 +32,13 @@ Settings come from environment variables, or from `backend/.env` (gitignored), w
 | `TRUST_PROXY` | no | `true` to take the client IP (for rate limits and login alerts) from `X-Real-IP`. Set it only when every request comes through a proxy that overwrites that header, like the frontend image's nginx; otherwise clients could forge it |
 | `RESEND_API_KEY`, `EMAIL_FROM` | no | [Resend](https://resend.com) key and sender for login alerts and password reset emails; without them no emails are sent |
 
-`docker-compose.yml` runs Postgres 18, Redis, Kafka and Kafka Connect (Debezium) locally; its header lists the matching settings. If you already run one of them, start only the others, e.g. `docker compose up -d redis kafka connect`. Then register the outbox connector, which sends outbox rows to Kafka (safe to re-run; the backend's migrations must have run once so the `outbox` table exists):
+`docker-compose.yml` runs Postgres 18, Redis, Kafka and Kafka Connect (Debezium) locally; its header lists the matching settings. If you already run one of them, start only the others, e.g. `docker compose up -d redis kafka connect connect-init`.
 
 ```sh
 docker compose up -d
-curl -X PUT -H "Content-Type: application/json" --data @debezium/outbox.json localhost:8083/connectors/outbox/config
 ```
+
+On every `up`, the one-off `connect-init` service registers the outbox connector (`debezium/outbox.json`), which sends outbox rows to Kafka. It keeps retrying until the backend's migrations have made the `outbox` table, then exits; `docker compose logs connect-init` shows where it's up to.
 
 Postgres needs `wal_level=logical` for Debezium, which the compose file sets.
 
@@ -90,7 +91,7 @@ DATABASE_URL=postgres://booking:booking@localhost:5432/booking go test ./...
 docker compose --profile app up -d --build
 ```
 
-and open http://localhost:8081. Compose points the backend at its own Postgres, Redis and Kafka, so the connection settings in `.env` are overridden. Register the outbox connector and load the seed as above.
+and open http://localhost:8081. Compose points the backend at its own Postgres, Redis and Kafka, so the connection settings in `.env` are overridden. It waits for Postgres to be healthy before starting the backend, and restarts the backend if it exits. Load the seed as above.
 
 ### IP country database
 

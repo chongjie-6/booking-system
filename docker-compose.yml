@@ -13,6 +13,11 @@ services:
       POSTGRES_DB: booking
     ports: ["5432:5432"]
     volumes: [postgres:/var/lib/postgresql]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "booking"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
 
   redis:
     image: redis:8
@@ -37,8 +42,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
 
   # Kafka Connect with Debezium, which sends outbox rows to Kafka. It starts with no connectors, and Kafka has no volume,
-  # so register the outbox connector after each `up` that recreates Kafka (safe to re-run):
-  #   curl -X PUT -H "Content-Type: application/json" --data @debezium/outbox.json localhost:8083/connectors/outbox/config
+  # so connect-init registers the outbox connector on every `up`.
   connect:
     image: quay.io/debezium/connect:3.3
     ports: ["8083:8083"]
@@ -50,13 +54,37 @@ services:
       OFFSET_STORAGE_TOPIC: connect_offsets
       STATUS_STORAGE_TOPIC: connect_statuses
 
+  # Registers (or updates) the outbox connector, then waits for its task to run, restarting it while it fails: it fails
+  # until the backend's migrations have made the outbox table. Exits once it runs; `docker compose logs connect-init`.
+  connect-init:
+    image: curlimages/curl:8.17.0
+    depends_on: [connect]
+    volumes: ["./debezium/outbox.json:/outbox.json:ro"]
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        api=http://connect:8083/connectors/outbox
+        until curl -fsS -o /dev/null -X PUT -H "Content-Type: application/json" --data @/outbox.json $$api/config; do
+          echo "waiting for Kafka Connect"; sleep 3
+        done
+        until curl -fsS $$api/status | grep -q '"tasks":\[{"id":0,"state":"RUNNING"'; do
+          echo "waiting for the outbox table"; sleep 5
+          curl -fsS -o /dev/null -X POST "$$api/restart?includeTasks=true&onlyFailed=true"
+        done
+        echo "outbox connector running"
+
   # The app itself, only with `docker compose --profile app up -d --build`; open http://localhost:8081.
   # The backend reads the rest of its settings (JWT_PRIVATE_KEY, TMDB_TOKEN, ...) from backend/.env. Its port isn't
   # published, so every request comes through nginx, which is what makes TRUST_PROXY safe.
+  # Restarts if it exits, e.g. when Kafka isn't up yet.
   backend:
     profiles: [app]
     build: backend
-    depends_on: [postgres, redis, kafka]
+    restart: on-failure
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+      kafka: { condition: service_started }
     env_file:
       - path: backend/.env
         required: false
