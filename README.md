@@ -74,6 +74,13 @@ cd backend
 go run ./cmd
 ```
 
+Tests that need Postgres (e.g. listing bookings) skip unless `DATABASE_URL` is set; CI runs them against Postgres 18. They work in a transaction that's rolled back, but point them at a dev database anyway:
+
+```sh
+cd backend
+DATABASE_URL=postgres://booking:booking@localhost:5432/booking go test ./...
+```
+
 ### IP country database
 
 Login alerts fire when a user logs in from a new browser, or from an IP that's on a new network and in a new country for them. The country data comes from the free [DB-IP Lite](https://db-ip.com/db/download/ip-to-country-lite) database, which is gitignored. Download it (Git Bash), and again each month for updates:
@@ -103,6 +110,7 @@ npm install
 npm run dev      # dev server
 npm run build    # type-check and production build
 npm run lint
+npm test         # vitest
 ```
 
 Signed-in users reach `/account` from their name in the header: their bookings (`GET /bookings`), their details (`PATCH /user`) and a password change (`POST /auth/password`).
