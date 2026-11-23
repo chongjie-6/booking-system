@@ -105,3 +105,23 @@ func dbCreateBooking(ctx context.Context, tx pgx.Tx, eventID, roomID, userID str
 	`, pgx.NamedArgs{"booking_id": bookingID, "event_id": eventID, "room_id": roomID, "seat_ids": seatIDs})
 	return bookingID, err
 }
+
+// dbListUserBookings fetches the user's bookings, latest showing first, each with its film, screen, price and seats.
+// Ref is worked out as in Create. Takes a context, querier and user ID; returns the bookings or the database error.
+func dbListUserBookings(ctx context.Context, q db.Querier, userID string) ([]UserBooking, error) {
+	rows, _ := q.Query(ctx, `
+	SELECT b.booking_id, upper(right(b.booking_id::text, 8)) AS ref, e.event_id, m.title, e.starts_at,
+	r.name AS room, e.price_cents,
+	json_agg(json_build_object('row', s.row_label, 'number', s.seat_number) ORDER BY s.row_label, s.seat_number) AS seats
+	FROM bookings b
+	JOIN events e ON e.event_id = b.event_id
+	JOIN movies m ON m.movie_id = e.movie_id
+	JOIN rooms r ON r.room_id = e.room_id
+	JOIN booking_seats bs ON bs.booking_id = b.booking_id
+	JOIN seats s ON s.seat_id = bs.seat_id
+	WHERE b.user_id = @user_id
+	GROUP BY b.booking_id, e.event_id, m.movie_id, r.room_id
+	ORDER BY e.starts_at DESC, b.booking_id DESC
+	`, pgx.NamedArgs{"user_id": userID})
+	return pgx.CollectRows(rows, pgx.RowToStructByName[UserBooking])
+}

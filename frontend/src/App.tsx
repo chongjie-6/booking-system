@@ -25,6 +25,7 @@ import Checkout from "@/app/sessions/[eventID]/checkout/page";
 import Done from "@/app/bookings/[ref]/page";
 import Home from "@/app/page";
 import Films from "@/app/movies/page";
+import Account from "@/app/account/page";
 import SeatPicker from "@/app/sessions/[eventID]/page";
 import { useTitle, type Entry } from "@/lib/routes";
 
@@ -123,7 +124,9 @@ export default function App() {
                 Couldn't sign you out. Try again.
               </span>
             )}
-            <span>{user.firstName}</span>
+            <Link className="link" to="/account">
+              {user.firstName}
+            </Link>
             <button className="link" onClick={signOut}>
               Sign out
             </button>
@@ -249,6 +252,12 @@ export default function App() {
               ) : (
                 <Navigate to=".." relative="path" replace />
               )
+            }
+          />
+          <Route
+            path="/account"
+            element={
+              <Account user={user} onSignedIn={setUser} onUpdated={setUser} />
             }
           />
           <Route

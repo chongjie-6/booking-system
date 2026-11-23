@@ -22,6 +22,6 @@ export default defineConfig({
     babel({ presets: [reactCompilerPreset()] })
   ],
   server: {
-    proxy: { '/auth': api, '/user': api, '/movies': api, '/events': api },
+    proxy: { '/auth': api, '/user': api, '/movies': api, '/events': api, '/bookings': api },
   },
 })

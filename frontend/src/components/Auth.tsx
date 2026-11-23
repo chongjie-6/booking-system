@@ -180,7 +180,7 @@ export function Auth({
 }
 
 // The label sits inside the input like a placeholder, then shrinks above the text once the input has focus or a value.
-function Field({
+export function Field({
   label,
   type,
   ...props

@@ -1,4 +1,4 @@
-import { useLocation, useParams } from "react-router";
+import { Link, useLocation, useParams } from "react-router";
 import { Ticket } from "@/components/Ticket";
 import { useTitle, type Entry } from "@/lib/routes";
 
@@ -31,6 +31,9 @@ export default function Done({ onAgain }: { onAgain: () => void }) {
       <button className="primary" onClick={onAgain}>
         Book another film
       </button>
+      <Link className="link" to="/account">
+        See all your bookings
+      </Link>
     </main>
   );
 }

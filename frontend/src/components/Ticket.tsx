@@ -1,12 +1,12 @@
-import { formatDay, formatTime, seatLabel, total, type Seat, type Showtime } from "@/lib/data";
+import { formatDay, formatTime, seatLabel, total, type SeatPlace, type TicketShowtime } from "@/lib/data";
 
 export function Ticket({
   showtime,
   seats,
   bookingRef,
 }: {
-  showtime: Showtime;
-  seats: Seat[];
+  showtime: TicketShowtime;
+  seats: SeatPlace[];
   bookingRef?: string;
 }) {
   return (

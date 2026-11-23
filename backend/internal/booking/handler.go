@@ -7,6 +7,7 @@ import (
 	"booking-system/pkg/response"
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 
@@ -87,6 +88,17 @@ func Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.Created(w, b)
+}
+
+// List returns the signed-in user's bookings, latest showing first. Takes the request; responds 200 with []UserBooking, or 500.
+func List(w http.ResponseWriter, r *http.Request) {
+	bs, err := dbListUserBookings(r.Context(), db.Pool, middleware.User(r).UserID)
+	if err != nil {
+		log.Printf("list bookings: %v", err)
+		response.Error(w, err)
+		return
+	}
+	response.Ok(w, bs, nil)
 }
 
 // checkSeats makes sure the showing hasn't started and every seat is in its room and unbooked. Takes a context, querier,
