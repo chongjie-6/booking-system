@@ -12,5 +12,6 @@ func Routes(r *http.ServeMux) {
 	})
 
 	r.HandleFunc("GET /movies", ListMovies)
+	r.HandleFunc("GET /movies/coming-soon", ComingSoon)
 	r.HandleFunc("GET /events/{id}/seats", ListSeats)
 }

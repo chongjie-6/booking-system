@@ -19,6 +19,17 @@ func ListMovies(w http.ResponseWriter, r *http.Request) {
 	response.Ok(w, movies, nil)
 }
 
+// ComingSoon returns the movies whose first showing is after ListMovies's 3 days, with their showings. Takes the request;
+// responds 200 with the movies, or 500.
+func ComingSoon(w http.ResponseWriter, r *http.Request) {
+	movies, err := dbComingSoon(r.Context())
+	if err != nil {
+		response.Error(w, err)
+		return
+	}
+	response.Ok(w, movies, nil)
+}
+
 // ListSeats returns a showing's seats and which are taken. Takes the request with the event ID in the path;
 // responds 200 with the seats, 404 if there's no such showing (or the ID isn't a UUID), or 500.
 func ListSeats(w http.ResponseWriter, r *http.Request) {

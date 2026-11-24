@@ -7,11 +7,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// dbListMovies fetches every movie that has a showing in the next 3 days, with those showings. Three days covers the
-// frontend's today, tomorrow and the day after in any time zone. Takes a context; returns the movies (featured first,
-// then by title) or the database error.
-func dbListMovies(ctx context.Context) ([]Movie, error) {
-	rows, _ := db.Pool.Query(ctx, `
+// movieQuery selects movies with their upcoming showings, soonest first; callers add the WHERE, GROUP BY and ORDER BY.
+const movieQuery = `
 	SELECT m.movie_id, m.title, m.genre, m.runtime_minutes, m.rating, m.synopsis, m.featured,
 	COALESCE(m.poster_path, '') AS poster_path, COALESCE(m.backdrop_path, '') AS backdrop_path,
 	COALESCE(m.trailer_key, '') AS trailer_key,
@@ -22,9 +19,28 @@ func dbListMovies(ctx context.Context) ([]Movie, error) {
 	JOIN events e USING (movie_id)
 	JOIN event_formats f USING (format_id)
 	JOIN rooms r USING (room_id)
+	`
+
+// dbListMovies fetches every movie that has a showing in the next 3 days, with those showings. Three days covers the
+// frontend's today, tomorrow and the day after in any time zone. Takes a context; returns the movies (featured first,
+// then by title) or the database error.
+func dbListMovies(ctx context.Context) ([]Movie, error) {
+	rows, _ := db.Pool.Query(ctx, movieQuery+`
 	WHERE e.starts_at > now() AND e.starts_at < now() + interval '3 days'
 	GROUP BY m.movie_id
 	ORDER BY m.featured DESC, m.title
+	`)
+	return pgx.CollectRows(rows, pgx.RowToStructByName[Movie])
+}
+
+// dbComingSoon fetches the movies with showings, none of them in dbListMovies's 3 days, so the first one is the opening.
+// Takes a context; returns the movies (soonest opening first) with all their showings, or the database error.
+func dbComingSoon(ctx context.Context) ([]Movie, error) {
+	rows, _ := db.Pool.Query(ctx, movieQuery+`
+	WHERE e.starts_at > now()
+	GROUP BY m.movie_id
+	HAVING min(e.starts_at) >= now() + interval '3 days'
+	ORDER BY min(e.starts_at), m.title
 	`)
 	return pgx.CollectRows(rows, pgx.RowToStructByName[Movie])
 }

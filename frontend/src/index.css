@@ -499,6 +499,30 @@ a.back {
   }
 }
 
+/* Not links or a loop, so it scrolls natively and doesn't fade out when the films fit. */
+.soon {
+  margin-top: 56px;
+
+  .section-head h2 {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+  }
+
+  .carousel {
+    cursor: auto;
+    mask-image: none;
+  }
+
+  /* Looks like the carousel's h2; h3 here as it sits under the section's h2. */
+  h3 {
+    margin: 14px 0 0;
+    font-family: var(--display);
+    font-size: 1.25rem;
+    font-weight: 800;
+    line-height: 1.1;
+    text-transform: uppercase;
+  }
+}
+
 /* Breaks out of #root to the full window width; body clips the part under the scrollbar gutter. */
 body {
   overflow-x: clip;
