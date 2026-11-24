@@ -28,7 +28,7 @@ Settings come from environment variables, or from `backend/.env` (gitignored), w
 | `PORT` | no | Port to listen on; default `8080` |
 | `REDIS_ADDRESS`, `REDIS_PASSWORD` | no | Redis for rate limiting, e.g. `localhost:6379` |
 | `GEOIP_DB_PATH` | no | See [IP country database](#ip-country-database) |
-| `TMDB_TOKEN` | no | [TMDB](https://www.themoviedb.org/settings/api) API read access token. Within a minute of seeding, films with a TMDB ID get TMDB's synopsis, runtime, poster, backdrop and YouTube trailer; without it they keep the seed's text and a drawn poster. TMDB's API is free for non-commercial use, and its terms require the credit in the page footer |
+| `TMDB_TOKEN` | no | [TMDB](https://www.themoviedb.org/settings/api) API read access token. The seed already carries TMDB's synopsis, runtime, poster, backdrop and YouTube trailer for its films; with the token, the backend fetches them within a minute for any film with a TMDB ID that the seed doesn't cover, and without it those films keep a drawn poster. TMDB's API is free for non-commercial use, and its terms require the credit in the page footer |
 | `TRUST_PROXY` | no | `true` to take the client IP (for rate limits and login alerts) from `X-Real-IP`. Set it only when every request comes through a proxy that overwrites that header, like the frontend image's nginx; otherwise clients could forge it |
 | `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY` | for booking | Stripe API keys (`sk_test_...`, `pk_test_...`). Without them checkout says payments aren't available. See [Payments](#payments) |
 | `STRIPE_WEBHOOK_SECRET` | for booking | Signing secret (`whsec_...`) of the webhook that sends `payment_intent.succeeded` to `/payments/webhook` |
