@@ -6,28 +6,25 @@ import {
   showtimesFor,
   upcomingDays,
   type Movie,
-  type Showtime,
 } from "@/lib/data";
-import { Link, useParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import { MoviesStatus } from "@/components/MoviesStatus";
 import { Poster, TmdbCredit } from "@/components/Poster";
 import { useTitle } from "@/lib/routes";
 
 export default function Films({
   movies,
-  day,
   onRetry,
-  onDay,
-  onPick,
 }: {
   movies: Movie[] | null | undefined;
-  day: number;
   onRetry: () => void;
-  onDay: (i: number) => void;
-  onPick: (s: Showtime) => void;
 }) {
   const { movie: movieSlug } = useParams();
   const days = upcomingDays();
+  // The day lives in the URL (?day=1), so refresh, Back and shared links keep it.
+  const [params, setParams] = useSearchParams();
+  const day = Math.max(0, Math.min(Math.trunc(Number(params.get("day"))) || 0, days.length - 1));
+  const onDay = (i: number) => setParams(i ? { day: String(i) } : {}, { replace: true });
   const now = new Date();
   const shown = movieSlug
     ? movies?.filter((m) => slug(m.title) === movieSlug)
@@ -103,13 +100,14 @@ export default function Films({
                   {!movieSlug ? null : sessions.length ? (
                     <div className="times">
                       {sessions.map((s) => (
-                        <button
+                        <Link
                           key={s.id}
+                          to={`/sessions/${s.id}`}
+                          state={{ pushed: true }}
                           aria-label={`${movie.title} at ${formatTime(s.start)}`}
-                          onClick={() => onPick(s)}
                         >
                           {formatTime(s.start)}
-                        </button>
+                        </Link>
                       ))}
                     </div>
                   ) : (

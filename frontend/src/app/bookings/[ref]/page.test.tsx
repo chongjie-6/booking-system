@@ -13,7 +13,7 @@ const open = () =>
   render(
     <MemoryRouter initialEntries={["/bookings/AB12CD34"]}>
       <Routes>
-        <Route path="/bookings/:ref" element={<Done onAgain={() => {}} />} />
+        <Route path="/bookings/:ref" element={<Done />} />
       </Routes>
     </MemoryRouter>,
   );

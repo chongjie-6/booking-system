@@ -338,6 +338,11 @@ a.back {
     background: var(--curtain);
     color: var(--muted);
   }
+
+  &:is(a) {
+    display: inline-block;
+    text-decoration: none;
+  }
 }
 
 .secondary {
@@ -599,10 +604,6 @@ body {
     font-size: clamp(2.25rem, 6vw, 4rem);
   }
 
-  .primary {
-    display: inline-block;
-    text-decoration: none;
-  }
 }
 
 .hero-tag {
@@ -693,16 +694,18 @@ body {
   gap: 8px;
   margin-top: 18px;
 
-  button {
+  a {
     padding: 10px 16px;
     border: 1px solid transparent;
     border-radius: 6px;
     background: var(--curtain);
+    color: inherit;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
+    text-decoration: none;
   }
 
-  button:hover {
+  a:hover {
     border-color: var(--brass);
     color: var(--brass);
   }
@@ -907,6 +910,29 @@ body {
 
   &.warn {
     border-color: var(--brass);
+  }
+}
+
+/* Booking progress: Seats › Payment › Confirmed */
+
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.875rem;
+
+  li + li::before {
+    content: '›';
+    margin-right: 8px;
+  }
+
+  [aria-current] {
+    color: var(--brass);
+    font-weight: 700;
   }
 }
 

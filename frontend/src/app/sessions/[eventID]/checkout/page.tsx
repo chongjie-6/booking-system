@@ -3,7 +3,8 @@ import { Link } from "react-router";
 import { loadStripe, type Stripe, type StripeElements, type StripePaymentElement } from "@stripe/stripe-js";
 import { api, ApiError, type User } from "@/lib/api";
 import { Auth } from "@/components/Auth";
-import type { Seat, Showtime } from "@/lib/data";
+import { total, type Seat, type Showtime } from "@/lib/data";
+import { Steps } from "@/components/Steps";
 import { Ticket } from "@/components/Ticket";
 
 // The hold timer warns this long before the seats are released. WCAG 2.2.1 asks for at least 20 seconds.
@@ -134,6 +135,7 @@ export default function Checkout({
       <button className="back" onClick={onBack} disabled={busy}>
         Change seats
       </button>
+      <Steps at={1} />
       <h1 tabIndex={-1}>Confirm your booking</h1>
       <div className="checkout">
         {user && paid ? (
@@ -153,6 +155,10 @@ export default function Checkout({
               tickets to {user.email}.
             </p>
             <div className="card" ref={box} />
+            <p className="rule">
+              Cancel from your account up to an hour before the session for a
+              full refund.
+            </p>
             {!card && !shown && (
               <p className="none" role="status">
                 Loading the card form…
@@ -183,7 +189,7 @@ export default function Checkout({
                 onClick={() => (shown ? retry(user) : pay(user))}
                 disabled={busy || (!card && !shown)}
               >
-                {busy ? "Paying…" : shown ? "Try again" : "Pay and book"}
+                {busy ? "Paying…" : shown ? "Try again" : `Pay ${total(showtime, seats.length)}`}
               </button>
             )}
           </div>

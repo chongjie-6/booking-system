@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import { api } from "@/lib/api";
+import { Steps } from "@/components/Steps";
 import { Ticket } from "@/components/Ticket";
 import { ticketShowtime, type UserBooking } from "@/lib/data";
 import { useTitle, type Entry } from "@/lib/routes";
 
 // Straight after booking, this tab's history holds the booking. Opened from a link, it's fetched; signed out, it can't be.
-export default function Done({ onAgain }: { onAgain: () => void }) {
+export default function Done() {
   const { ref = "" } = useParams();
   const booking = (useLocation().state as Entry | null)?.booking;
   // undefined while loading, null if it couldn't be fetched
@@ -19,6 +20,7 @@ export default function Done({ onAgain }: { onAgain: () => void }) {
 
   return (
     <main className="done">
+      <Steps at={2} />
       <h1 tabIndex={-1}>Booking confirmed</h1>
       {booking ? (
         <>
@@ -46,9 +48,9 @@ export default function Done({ onAgain }: { onAgain: () => void }) {
           Loading your booking…
         </p>
       )}
-      <button className="primary" onClick={onAgain}>
+      <Link className="primary" to="/">
         Book another film
-      </button>
+      </Link>
       <Link className="link" to="/account">
         See all your bookings
       </Link>

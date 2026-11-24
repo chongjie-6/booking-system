@@ -43,7 +43,6 @@ export default function App() {
   const entry = location.state as Entry | null;
   const [signingIn, setSigningIn] = useState(!!resetToken);
   const [drawerOpens, setDrawerOpens] = useState(0);
-  const [day, setDay] = useState(0);
   // undefined while loading, null if it failed
   const [movies, setMovies] = useState<Movie[] | null>();
   const [moviesAttempt, setMoviesAttempt] = useState(0);
@@ -191,15 +190,7 @@ export default function App() {
               key={path}
               path={path}
               element={
-                <Films
-                  movies={movies}
-                  day={day}
-                  onRetry={retryMovies}
-                  onDay={setDay}
-                  onPick={(s) =>
-                    navigate(`/sessions/${s.id}`, { state: { pushed: true } })
-                  }
-                />
+                <Films movies={movies} onRetry={retryMovies} />
               }
             />
           ))}
@@ -272,7 +263,7 @@ export default function App() {
           />
           <Route
             path="/bookings/:ref"
-            element={<Done onAgain={() => navigate("/")} />}
+            element={<Done />}
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

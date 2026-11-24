@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router";
 import { api, releasing } from "@/lib/api";
 import type { Entry } from "@/lib/routes";
 import { Poster, TmdbCredit } from "@/components/Poster";
+import { Steps } from "@/components/Steps";
 import {
   MAX_SEATS,
   formatDay,
@@ -86,6 +87,7 @@ export default function SeatPicker({
         <button className="back" onClick={onBack}>
           Back to films
         </button>
+        <Steps at={0} />
         <header className="session-head">
           <Poster movie={showtime.movie} />
           <div>
