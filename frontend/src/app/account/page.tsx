@@ -146,7 +146,7 @@ function BookingList({
     <ul className={past ? "bookings past" : "bookings"}>
       {bookings.map((b) => (
         <li key={b.bookingID}>
-          <Ticket showtime={ticketShowtime(b)} seats={b.seats} bookingRef={b.ref} />
+          <Ticket showtime={ticketShowtime(b)} seats={b.seats} totalCents={b.totalCents} bookingRef={b.ref} />
           {onCancel && canCancel(b, now) && (
             <button className="link" onClick={() => onCancel(b)} disabled={!!cancelling}>
               {cancelling === b.bookingID ? "Cancelling…" : `Cancel booking ${b.ref}`}

@@ -16,7 +16,7 @@ const booking = (ref: string, inMinutes: number) => ({
   title: `Film ${ref}`,
   startsAt: new Date(Date.now() + inMinutes * 60_000).toISOString(),
   room: "Screen 1",
-  priceCents: 1500,
+  totalCents: 1500,
   seats: [{ row: "A", number: 1 }],
 });
 

@@ -60,8 +60,8 @@ WITH m (title, tmdb_id, genre, runtime, rating, synopsis, room, times) AS (VALUE
     SELECT title, tmdb_id, genre, runtime, rating, synopsis FROM m
     RETURNING movie_id, title
 )
-INSERT INTO events (movie_id, room_id, price_cents, starts_at)
-SELECT movie.movie_id, r.room_id, 1650,
+INSERT INTO events (movie_id, room_id, format_id, starts_at)
+SELECT movie.movie_id, r.room_id, (SELECT format_id FROM event_formats WHERE name = 'Standard'),
     ((now() AT TIME ZONE 'Australia/Sydney')::date + d + t::time) AT TIME ZONE 'Australia/Sydney'
 FROM m
 JOIN movie USING (title)
@@ -70,6 +70,13 @@ generate_series(0, 13) AS d,
 unnest(m.times) AS t;
 
 UPDATE movies SET featured = true WHERE title IN ('Interstellar', 'Dune: Part Two');
+
+-- A few films in other formats, so prices vary. The formats and their prices come from the migrations.
+UPDATE events e SET format_id = f.format_id
+FROM movies m, event_formats f, (VALUES
+    ('Interstellar', 'IMAX'), ('Dune: Part Two', 'IMAX'), ('Spider-Man: Into the Spider-Verse', '3D'), ('The Dark Knight', '4D')
+) AS x (title, format)
+WHERE m.movie_id = e.movie_id AND m.title = x.title AND f.name = x.format;
 
 -- Each existing user gets the same five upcoming bookings of two seats, unpaid (no PaymentIntent, so cancelling skips
 -- the refund). User n (oldest first) sits in row B, C, ... so their seats never clash.
@@ -93,11 +100,13 @@ WITH u AS (
     WHERE u.n <= 7
     RETURNING booking_id, event_id, user_id
 )
-INSERT INTO booking_seats (booking_id, event_id, room_id, seat_id)
-SELECT b.booking_id, b.event_id, e.room_id, s.seat_id
+INSERT INTO booking_seats (booking_id, event_id, room_id, seat_id, price_cents)
+SELECT b.booking_id, b.event_id, e.room_id, s.seat_id, f.base_price_cents + sts.surcharge_cents
 FROM b
 JOIN u USING (user_id)
 JOIN events e USING (event_id)
-JOIN seats s ON s.room_id = e.room_id AND s.row_label = chr(65 + u.n::int) AND s.seat_number IN (7, 8);
+JOIN event_formats f USING (format_id)
+JOIN seats s ON s.room_id = e.room_id AND s.row_label = chr(65 + u.n::int) AND s.seat_number IN (7, 8)
+JOIN seat_type_surcharges sts USING (seat_type);
 
 COMMIT;

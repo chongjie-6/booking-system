@@ -16,10 +16,11 @@ func dbListMovies(ctx context.Context) ([]Movie, error) {
 	COALESCE(m.poster_path, '') AS poster_path, COALESCE(m.backdrop_path, '') AS backdrop_path,
 	COALESCE(m.trailer_key, '') AS trailer_key,
 	json_agg(json_build_object(
-		'eventID', e.event_id, 'startsAt', e.starts_at, 'priceCents', e.price_cents, 'room', r.name
+		'eventID', e.event_id, 'startsAt', e.starts_at, 'format', f.name, 'room', r.name
 	) ORDER BY e.starts_at) AS showings
 	FROM movies m
 	JOIN events e USING (movie_id)
+	JOIN event_formats f USING (format_id)
 	JOIN rooms r USING (room_id)
 	WHERE e.starts_at > now() AND e.starts_at < now() + interval '3 days'
 	GROUP BY m.movie_id
@@ -28,13 +29,16 @@ func dbListMovies(ctx context.Context) ([]Movie, error) {
 	return pgx.CollectRows(rows, pgx.RowToStructByName[Movie])
 }
 
-// dbListSeats fetches every seat in a showing's room, marking the ones already booked for that showing.
+// dbListSeats fetches every seat in a showing's room with its price, marking the ones already booked for that showing.
 // Takes a context and event ID; returns the seats by row then number, or none if the showing doesn't exist.
 func dbListSeats(ctx context.Context, eventID string) ([]Seat, error) {
 	rows, _ := db.Pool.Query(ctx, `
-	SELECT s.seat_id, s.row_label, s.seat_number, s.seat_type, bs.seat_id IS NOT NULL AS taken
+	SELECT s.seat_id, s.row_label, s.seat_number, s.seat_type, f.base_price_cents + sts.surcharge_cents AS price_cents,
+	bs.seat_id IS NOT NULL AS taken
 	FROM events e
+	JOIN event_formats f USING (format_id)
 	JOIN seats s USING (room_id)
+	JOIN seat_type_surcharges sts USING (seat_type)
 	LEFT JOIN booking_seats bs ON bs.event_id = e.event_id AND bs.seat_id = s.seat_id
 	WHERE e.event_id = @event_id
 	ORDER BY s.row_label, s.seat_number

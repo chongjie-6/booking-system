@@ -104,9 +104,10 @@ export default function Films({
                           key={s.id}
                           to={`/sessions/${s.id}`}
                           state={{ pushed: true }}
-                          aria-label={`${movie.title} at ${formatTime(s.start)}`}
+                          aria-label={`${movie.title} at ${formatTime(s.start)}, ${s.format}`}
                         >
                           {formatTime(s.start)}
+                          {s.format !== "Standard" && <small> {s.format}</small>}
                         </Link>
                       ))}
                     </div>

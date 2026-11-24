@@ -30,10 +30,11 @@ type Booking struct {
 	Ref       string `json:"ref"`
 }
 
-// freeSeats is how many of the asked-for seats a showing can still sell, with the showing's room and seat price.
+// freeSeats is how many of the asked-for seats a showing can still sell, with the showing's room and what the seats
+// cost together (the format's price plus each seat type's surcharge).
 type freeSeats struct {
 	RoomID     string `db:"room_id"`
-	PriceCents int    `db:"price_cents"`
+	TotalCents int    `db:"total_cents"`
 	Free       int    `db:"free"`
 }
 
@@ -52,7 +53,7 @@ type UserBooking struct {
 	Title      string       `db:"title" json:"title"`
 	StartsAt   time.Time    `db:"starts_at" json:"startsAt"`
 	Room       string       `db:"room" json:"room"`
-	PriceCents int          `db:"price_cents" json:"priceCents"`
+	TotalCents int          `db:"total_cents" json:"totalCents"` // what the seats sold for
 	Seats      []bookedSeat `db:"seats" json:"seats"`
 }
 

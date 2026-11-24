@@ -58,7 +58,7 @@ func SendBookingConfirmedNotification(ctx context.Context, q db.Querier, userID,
 	return outbox.Enqueue(ctx, q, mq.NotificationsTopic, userID, event{Type: bookingConfirmed, UserID: userID, BookingID: bookingID, Ref: ref})
 }
 
-// sendBookingConfirmedEmail emails the user their tickets: film, time, screen, seats, total and reference.
+// sendBookingConfirmedEmail emails the user their tickets: film, time, screen, format, seats, total and reference.
 // Takes a context and the event's JSON; returns the decode, lookup, template or send error.
 func sendBookingConfirmedEmail(ctx context.Context, b []byte) error {
 	var e event

@@ -9,6 +9,7 @@ import {
   formatDay,
   formatRuntime,
   formatTime,
+  money,
   seatLabel,
   total,
   type Seat,
@@ -37,6 +38,8 @@ export default function SeatPicker({
   const [lost, setLost] = useState<Seat[]>([]);
   const atMax = seats.length >= MAX_SEATS;
   const types = new Set(all?.map((s) => s.type));
+  const priceOf = (type: Seat["type"]) =>
+    money.format((all?.find((s) => s.type === type)?.priceCents ?? 0) / 100);
   const soldOut = !!all?.length && all.every((s) => s.taken);
 
   useEffect(() => {
@@ -98,6 +101,7 @@ export default function SeatPicker({
               </span>
               <span>{formatRuntime(showtime.movie.runtimeMinutes)}</span>
               <span>{showtime.room}</span>
+              <span>{showtime.format}</span>
             </p>
           </div>
         </header>
@@ -155,7 +159,7 @@ export default function SeatPicker({
                       data-type={seat.type}
                       disabled={isTaken}
                       aria-pressed={selected}
-                      aria-label={`Row ${seat.row}, seat ${seat.number}${seat.type === "standard" ? "" : `, ${seat.type}`}${isTaken ? ", taken" : ""}`}
+                      aria-label={`Row ${seat.row}, seat ${seat.number}${seat.type === "standard" ? "" : `, ${seat.type}`}${isTaken ? ", taken" : `, ${money.format(seat.priceCents / 100)}`}`}
                       onClick={() => toggle(seat)}
                     >
                       {selected
@@ -175,7 +179,7 @@ export default function SeatPicker({
         {all && (
           <ul className="legend">
             <li>
-              <span className="swatch" /> Available
+              <span className="swatch" /> Available, {priceOf("standard")}
             </li>
             <li>
               <span className="swatch selected" /> Your seats
@@ -198,7 +202,8 @@ export default function SeatPicker({
             )}
             {types.has("premium") && (
               <li>
-                <span className="swatch" data-type="premium" /> Premium
+                <span className="swatch" data-type="premium" /> Premium,{" "}
+                {priceOf("premium")}
               </li>
             )}
           </ul>
@@ -217,7 +222,7 @@ export default function SeatPicker({
               </p>
             )}
           </div>
-          <strong className="total">{total(showtime, seats.length)}</strong>
+          <strong className="total">{total(seats)}</strong>
           <button
             className="primary"
             disabled={!seats.length}

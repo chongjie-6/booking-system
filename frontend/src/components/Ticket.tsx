@@ -1,12 +1,14 @@
-import { formatDay, formatTime, seatLabel, total, type SeatPlace, type TicketShowtime } from "@/lib/data";
+import { formatDay, formatTime, money, seatLabel, type SeatPlace, type TicketShowtime } from "@/lib/data";
 
 export function Ticket({
   showtime,
   seats,
+  totalCents,
   bookingRef,
 }: {
   showtime: TicketShowtime;
   seats: SeatPlace[];
+  totalCents: number;
   bookingRef?: string;
 }) {
   return (
@@ -24,7 +26,7 @@ export function Ticket({
           <dt>Seats</dt>
           <dd>{seats.map(seatLabel).join(", ")}</dd>
           <dt>Total</dt>
-          <dd>{total(showtime, seats.length)}</dd>
+          <dd>{money.format(totalCents / 100)}</dd>
         </dl>
       </div>
       <div className="stub">

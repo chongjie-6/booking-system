@@ -13,15 +13,26 @@ type movieRequest struct {
 	Featured       bool   `json:"featured"`
 }
 
-// eventRequest is a showing to add or replace. Stripe's smallest charge in AUD is 50 cents.
+// eventRequest is a showing to add or replace. Its seats' price comes from the format.
 type eventRequest struct {
-	MovieID    string    `json:"movieID" validate:"required,uuid"`
-	RoomID     string    `json:"roomID" validate:"required,uuid"`
-	StartsAt   time.Time `json:"startsAt" validate:"required"`
-	PriceCents int       `json:"priceCents" validate:"min=50,max=100000"`
+	MovieID  string    `json:"movieID" validate:"required,uuid"`
+	RoomID   string    `json:"roomID" validate:"required,uuid"`
+	StartsAt time.Time `json:"startsAt" validate:"required"`
+	FormatID string    `json:"formatID" validate:"required,uuid"`
 }
 
-// created is the ID of a new film or showing.
+// formatRequest is a showing format to add or replace. Stripe's smallest charge in AUD is 50 cents.
+type formatRequest struct {
+	Name           string `json:"name" validate:"required,max=50"`
+	BasePriceCents int    `json:"basePriceCents" validate:"min=50,max=100000"`
+}
+
+// surchargeRequest is what a seat type adds to the format's price.
+type surchargeRequest struct {
+	SurchargeCents int `json:"surchargeCents" validate:"min=0,max=100000"`
+}
+
+// created is the ID of a new film, showing or format.
 type created struct {
 	ID string `json:"id"`
 }
@@ -41,12 +52,26 @@ type Movie struct {
 
 // Showing is an upcoming showing. Booked is how many seats are sold; a showing with any can't be changed.
 type Showing struct {
-	EventID    string    `json:"eventID"`
-	StartsAt   time.Time `json:"startsAt"`
-	PriceCents int       `json:"priceCents"`
-	RoomID     string    `json:"roomID"`
-	Room       string    `json:"room"`
-	Booked     int       `json:"booked"`
+	EventID  string    `json:"eventID"`
+	StartsAt time.Time `json:"startsAt"`
+	FormatID string    `json:"formatID"`
+	Format   string    `json:"format"`
+	RoomID   string    `json:"roomID"`
+	Room     string    `json:"room"`
+	Booked   int       `json:"booked"`
+}
+
+// Format is a kind of showing, e.g. "IMAX", with what a standard seat at one costs.
+type Format struct {
+	FormatID       string `db:"format_id" json:"formatID"`
+	Name           string `db:"name" json:"name"`
+	BasePriceCents int    `db:"base_price_cents" json:"basePriceCents"`
+}
+
+// Surcharge is what a seat type, e.g. "premium", adds to the price of a seat at any showing.
+type Surcharge struct {
+	SeatType       string `db:"seat_type" json:"seatType"`
+	SurchargeCents int    `db:"surcharge_cents" json:"surchargeCents"`
 }
 
 // Room is a screen showings can be put in.

@@ -10,11 +10,13 @@ import {
   toLocalInput,
   type AdminMovie,
   type AdminShowing,
+  type Format,
   type Room,
+  type Surcharge,
 } from "@/lib/data";
 import { useTitle } from "@/lib/routes";
 
-// Staff manage films and showings here. Screens are set up with SQL. onChanged refreshes the public listings.
+// Staff manage films, showings, formats and seat surcharges here. Screens are set up with SQL. onChanged refreshes the public listings.
 export default function Admin({
   user,
   onSignedIn,
@@ -46,12 +48,22 @@ export default function Admin({
 
 function Manage({ onChanged }: { onChanged: () => void }) {
   // undefined while loading, null if it failed
-  const [data, setData] = useState<{ movies: AdminMovie[]; rooms: Room[] } | null>();
+  const [data, setData] = useState<{
+    movies: AdminMovie[];
+    rooms: Room[];
+    formats: Format[];
+    surcharges: Surcharge[];
+  } | null>();
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    Promise.all([api.get<AdminMovie[]>("/admin/movies"), api.get<Room[]>("/admin/rooms")]).then(
-      ([movies, rooms]) => setData({ movies, rooms }),
+    Promise.all([
+      api.get<AdminMovie[]>("/admin/movies"),
+      api.get<Room[]>("/admin/rooms"),
+      api.get<Format[]>("/admin/formats"),
+      api.get<Surcharge[]>("/admin/surcharges"),
+    ]).then(
+      ([movies, rooms, formats, surcharges]) => setData({ movies, rooms, formats, surcharges }),
       () => setData(null),
     );
   }, [attempt]);
@@ -86,16 +98,41 @@ function Manage({ onChanged }: { onChanged: () => void }) {
       <section>
         <h2>Films</h2>
         {data.movies.length ? (
-          data.movies.map((m) => <Film key={m.movieID} movie={m} rooms={data.rooms} onSaved={saved} />)
+          data.movies.map((m) => <Film key={m.movieID} movie={m} rooms={data.rooms} formats={data.formats} onSaved={saved} />)
         ) : (
           <p className="none">No films yet.</p>
         )}
+      </section>
+      <section>
+        <h2>Formats and prices</h2>
+        <p className="rule">A seat costs its showing's format price plus its seat type's surcharge. Bookings keep what they paid.</p>
+        <ul className="showings">
+          {data.formats.map((f) => (
+            <FormatItem key={f.formatID} format={f} onSaved={saved} />
+          ))}
+        </ul>
+        <h3>Add a format</h3>
+        <FormatForm onSaved={saved} />
+      </section>
+      <section>
+        <h2>Seat surcharges</h2>
+        <SurchargeForm surcharges={data.surcharges} onSaved={saved} />
       </section>
     </>
   );
 }
 
-function Film({ movie, rooms, onSaved }: { movie: AdminMovie; rooms: Room[]; onSaved: () => void }) {
+function Film({
+  movie,
+  rooms,
+  formats,
+  onSaved,
+}: {
+  movie: AdminMovie;
+  rooms: Room[];
+  formats: Format[];
+  onSaved: () => void;
+}) {
   const remove = useDelete(`/admin/movies/${movie.movieID}`, `Delete ${movie.title}?`, onSaved);
   const n = movie.showings.length;
 
@@ -117,14 +154,14 @@ function Film({ movie, rooms, onSaved }: { movie: AdminMovie; rooms: Room[]; onS
         {n ? (
           <ul className="showings">
             {movie.showings.map((s) => (
-              <Showing key={s.eventID} movieID={movie.movieID} showing={s} rooms={rooms} onSaved={onSaved} />
+              <Showing key={s.eventID} movieID={movie.movieID} showing={s} rooms={rooms} formats={formats} onSaved={onSaved} />
             ))}
           </ul>
         ) : (
           <p className="none">None.</p>
         )}
         <h3>Add a showing</h3>
-        <ShowingForm movieID={movie.movieID} rooms={rooms} onSaved={onSaved} />
+        <ShowingForm movieID={movie.movieID} rooms={rooms} formats={formats} onSaved={onSaved} />
       </div>
     </details>
   );
@@ -134,11 +171,13 @@ function Showing({
   movieID,
   showing,
   rooms,
+  formats,
   onSaved,
 }: {
   movieID: string;
   showing: AdminShowing;
   rooms: Room[];
+  formats: Format[];
   onSaved: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -148,7 +187,7 @@ function Showing({
   return (
     <li>
       <p>
-        {formatDay(start)}, {formatTime(start)} · {showing.room} · {money.format(showing.priceCents / 100)} ·{" "}
+        {formatDay(start)}, {formatTime(start)} · {showing.room} · {showing.format} ·{" "}
         {showing.booked} seat{showing.booked === 1 ? "" : "s"} sold
       </p>
       {showing.booked ? (
@@ -164,7 +203,7 @@ function Showing({
           <Status error={remove.error} notice="" />
         </div>
       )}
-      {editing && <ShowingForm movieID={movieID} showing={showing} rooms={rooms} onSaved={onSaved} />}
+      {editing && <ShowingForm movieID={movieID} showing={showing} rooms={rooms} formats={formats} onSaved={onSaved} />}
     </li>
   );
 }
@@ -228,11 +267,13 @@ function ShowingForm({
   movieID,
   showing,
   rooms,
+  formats,
   onSaved,
 }: {
   movieID: string;
   showing?: AdminShowing;
   rooms: Room[];
+  formats: Format[];
   onSaved: () => void;
 }) {
   const { busy, error, notice, run } = useForm({});
@@ -247,7 +288,7 @@ function ShowingForm({
             movieID,
             roomID: f.roomID,
             startsAt: new Date(f.startsAt).toISOString(), // the input's value is in the browser's time zone
-            priceCents: Math.round(Number(f.price) * 100),
+            formatID: f.formatID,
           };
           if (showing) await api.put(`/admin/events/${showing.eventID}`, body);
           else {
@@ -278,19 +319,129 @@ function ShowingForm({
           <input type="datetime-local" name="startsAt" required defaultValue={showing && toLocalInput(showing.startsAt)} />
         </label>
       </div>
-      <Field
-        label="Price per seat ($)"
-        name="price"
-        type="number"
-        required
-        min={0.5}
-        max={1000}
-        step={0.01}
-        defaultValue={showing && (showing.priceCents / 100).toFixed(2)}
-      />
+      <label className="plain">
+        <span>Format</span>
+        <select name="formatID" required defaultValue={showing?.formatID ?? ""}>
+          <option value="" disabled>
+            Choose a format
+          </option>
+          {formats.map((f) => (
+            <option key={f.formatID} value={f.formatID}>
+              {f.name} ({money.format(f.basePriceCents / 100)} a seat)
+            </option>
+          ))}
+        </select>
+      </label>
       <Status error={error} notice={notice} />
       <button className="primary" disabled={busy}>
         {busy ? "Saving…" : showing ? "Save showing" : "Add showing"}
+      </button>
+    </form>
+  );
+}
+
+function FormatItem({ format, onSaved }: { format: Format; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const remove = useDelete(`/admin/formats/${format.formatID}`, `Delete the ${format.name} format?`, onSaved);
+
+  return (
+    <li>
+      <p>
+        {format.name} · {money.format(format.basePriceCents / 100)} a seat
+      </p>
+      <div className="row-actions">
+        <button className="link" onClick={() => setEditing(!editing)} aria-expanded={editing}>
+          {editing ? "Stop editing" : "Edit"}
+        </button>
+        <button className="link" onClick={remove.run} disabled={remove.busy}>
+          Delete
+        </button>
+        <Status error={remove.error} notice="" />
+      </div>
+      {editing && <FormatForm format={format} onSaved={onSaved} />}
+    </li>
+  );
+}
+
+function FormatForm({ format, onSaved }: { format?: Format; onSaved: () => void }) {
+  const { busy, error, notice, run } = useForm({});
+
+  return (
+    <form
+      className="fields"
+      onSubmit={(e) => {
+        const form = e.currentTarget;
+        run(e, async (f) => {
+          const body = { name: f.name.trim(), basePriceCents: Math.round(Number(f.price) * 100) };
+          if (format) await api.put(`/admin/formats/${format.formatID}`, body);
+          else {
+            await api.post("/admin/formats", body);
+            form.reset();
+          }
+          onSaved();
+          return format ? "Format saved." : `${body.name} added.`;
+        });
+      }}
+    >
+      <div className="pair">
+        <Field label="Name, e.g. IMAX" name="name" required pattern=".*\S.*" maxLength={50} defaultValue={format?.name} />
+        <Field
+          label="Price per seat ($)"
+          name="price"
+          type="number"
+          required
+          min={0.5}
+          max={1000}
+          step={0.01}
+          defaultValue={format && (format.basePriceCents / 100).toFixed(2)}
+        />
+      </div>
+      <Status error={error} notice={notice} />
+      <button className="primary" disabled={busy}>
+        {busy ? "Saving…" : format ? "Save format" : "Add format"}
+      </button>
+    </form>
+  );
+}
+
+// One form for every seat type's surcharge; saving sends each of them.
+function SurchargeForm({ surcharges, onSaved }: { surcharges: Surcharge[]; onSaved: () => void }) {
+  const { busy, error, notice, run } = useForm({});
+
+  return (
+    <form
+      className="fields"
+      onSubmit={(e) =>
+        run(e, async (f) => {
+          await Promise.all(
+            surcharges.map((s) =>
+              api.put(`/admin/surcharges/${s.seatType}`, { surchargeCents: Math.round(Number(f[s.seatType]) * 100) }),
+            ),
+          );
+          onSaved();
+          return "Surcharges saved.";
+        })
+      }
+    >
+      <p className="rule">Added to the format's price for each seat of that type.</p>
+      <div className="pair">
+        {surcharges.map((s) => (
+          <Field
+            key={s.seatType}
+            label={`${s.seatType[0].toUpperCase()}${s.seatType.slice(1)} seats (+$)`}
+            name={s.seatType}
+            type="number"
+            required
+            min={0}
+            max={1000}
+            step={0.01}
+            defaultValue={(s.surchargeCents / 100).toFixed(2)}
+          />
+        ))}
+      </div>
+      <Status error={error} notice={notice} />
+      <button className="primary" disabled={busy}>
+        {busy ? "Saving…" : "Save surcharges"}
       </button>
     </form>
   );

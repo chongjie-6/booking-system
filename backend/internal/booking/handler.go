@@ -80,7 +80,7 @@ func Pay(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, err)
 		return
 	}
-	amount := f.PriceCents * len(req.SeatIDs)
+	amount := f.TotalCents
 	pi, err := stripe.CreatePaymentIntent(ctx, amount, map[string]string{
 		"event_id": eventID, "user_id": userID, "seat_ids": strings.Join(req.SeatIDs, ","), // 10 UUIDs fit Stripe's 500 characters
 	})
@@ -231,7 +231,7 @@ func book(ctx context.Context, eventID, userID string, seatIDs []string, pi stri
 		if err != nil {
 			return err
 		}
-		if pi.Amount != f.PriceCents*len(seatIDs) {
+		if pi.Amount != f.TotalCents {
 			return errPriceChanged
 		}
 		if b.BookingID, err = dbCreateBooking(ctx, tx, eventID, f.RoomID, userID, seatIDs, pi.ID); err != nil {
@@ -282,7 +282,7 @@ func refOf(bookingID string) string {
 }
 
 // checkSeats makes sure the showing hasn't started and every seat is in its room and unbooked. Takes a context, querier,
-// event ID and seats; returns the showing's room and price, errNoShowing, errSeatsTaken, or the database error.
+// event ID and seats; returns the showing's room and the seats' total, errNoShowing, errSeatsTaken, or the database error.
 func checkSeats(ctx context.Context, q db.Querier, eventID string, seatIDs []string) (freeSeats, error) {
 	f, err := dbFreeSeats(ctx, q, eventID, seatIDs)
 	if pgErr, ok := errors.AsType[*pgconn.PgError](err); errors.Is(err, pgx.ErrNoRows) || ok && pgErr.Code == "22P02" { // 22P02: not a UUID

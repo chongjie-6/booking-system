@@ -17,19 +17,21 @@ type Movie struct {
 	Showings       []Showing `db:"showings" json:"showings"`
 }
 
-// Showing is one screening of a movie (an events row). Room is the room's name, e.g. "Screen 1".
+// Showing is one screening of a movie (an events row). Format is e.g. "IMAX"; Room is the room's name, e.g. "Screen 1".
 type Showing struct {
-	EventID    string    `json:"eventID"`
-	StartsAt   time.Time `json:"startsAt"`
-	PriceCents int       `json:"priceCents"`
-	Room       string    `json:"room"`
+	EventID  string    `json:"eventID"`
+	StartsAt time.Time `json:"startsAt"`
+	Format   string    `json:"format"`
+	Room     string    `json:"room"`
 }
 
-// Seat is one seat in a showing's room. Taken means it's already booked for that showing.
+// Seat is one seat in a showing's room. PriceCents is the format's price plus the seat type's surcharge.
+// Taken means it's already booked for that showing.
 type Seat struct {
-	SeatID string `db:"seat_id" json:"seatID"`
-	Row    string `db:"row_label" json:"row"`
-	Number int    `db:"seat_number" json:"number"`
-	Type   string `db:"seat_type" json:"type"`
-	Taken  bool   `db:"taken" json:"taken"`
+	SeatID     string `db:"seat_id" json:"seatID"`
+	Row        string `db:"row_label" json:"row"`
+	Number     int    `db:"seat_number" json:"number"`
+	Type       string `db:"seat_type" json:"type"`
+	PriceCents int    `db:"price_cents" json:"priceCents"`
+	Taken      bool   `db:"taken" json:"taken"`
 }

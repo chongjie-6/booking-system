@@ -33,7 +33,7 @@ const booking = (ref: string, startsAt: string): UserBooking => ({
   title: "Film",
   startsAt,
   room: "Screen 1",
-  priceCents: 1500,
+  totalCents: 1500,
   seats: [{ row: "C", number: 4 }],
 });
 
@@ -59,8 +59,8 @@ describe("data", () => {
 
   it("finds showtimes by event and by day", () => {
     const m = movie([
-      { eventID: "a", startsAt: "2026-06-01T09:00:00", priceCents: 1500, room: "Screen 1" },
-      { eventID: "b", startsAt: "2026-06-02T09:00:00", priceCents: 1500, room: "Screen 2" },
+      { eventID: "a", startsAt: "2026-06-01T09:00:00", format: "IMAX", room: "Screen 1" },
+      { eventID: "b", startsAt: "2026-06-02T09:00:00", format: "IMAX", room: "Screen 2" },
     ]);
     expect(findShowtime([m], "b")?.room).toBe("Screen 2");
     expect(findShowtime([m], "missing")).toBeUndefined();
@@ -82,6 +82,6 @@ describe("data", () => {
 
   it("formats seats and totals", () => {
     expect(seatLabel({ row: "C", number: 4 })).toBe("C4");
-    expect(total({ priceCents: 1550 }, 3)).toBe("$46.50");
+    expect(total([{ priceCents: 1550 }, { priceCents: 1550 }, { priceCents: 1850 }])).toBe("$49.50");
   });
 });

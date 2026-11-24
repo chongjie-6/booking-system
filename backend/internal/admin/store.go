@@ -14,11 +14,13 @@ func dbListMovies(ctx context.Context, q db.Querier) ([]Movie, error) {
 	rows, _ := q.Query(ctx, `
 	SELECT m.movie_id, m.title, m.genre, m.runtime_minutes, m.rating, m.synopsis, m.tmdb_id, m.featured,
 	COALESCE(json_agg(json_build_object(
-		'eventID', e.event_id, 'startsAt', e.starts_at, 'priceCents', e.price_cents, 'roomID', e.room_id, 'room', r.name,
+		'eventID', e.event_id, 'startsAt', e.starts_at, 'formatID', e.format_id, 'format', f.name,
+		'roomID', e.room_id, 'room', r.name,
 		'booked', (SELECT count(*) FROM booking_seats bs WHERE bs.event_id = e.event_id)
 	) ORDER BY e.starts_at) FILTER (WHERE e.event_id IS NOT NULL), '[]') AS showings
 	FROM movies m
 	LEFT JOIN events e ON e.movie_id = m.movie_id AND e.starts_at > now()
+	LEFT JOIN event_formats f ON f.format_id = e.format_id
 	LEFT JOIN rooms r ON r.room_id = e.room_id
 	GROUP BY m.movie_id
 	ORDER BY m.title
@@ -30,6 +32,46 @@ func dbListMovies(ctx context.Context, q db.Querier) ([]Movie, error) {
 func dbListRooms(ctx context.Context, q db.Querier) ([]Room, error) {
 	rows, _ := q.Query(ctx, `SELECT room_id, name, capacity FROM rooms ORDER BY name`)
 	return pgx.CollectRows(rows, pgx.RowToStructByName[Room])
+}
+
+// dbListFormats fetches every showing format, cheapest first. Takes a context and querier; returns the formats or the
+// database error.
+func dbListFormats(ctx context.Context, q db.Querier) ([]Format, error) {
+	rows, _ := q.Query(ctx, `SELECT format_id, name, base_price_cents FROM event_formats ORDER BY base_price_cents, name`)
+	return pgx.CollectRows(rows, pgx.RowToStructByName[Format])
+}
+
+// dbSaveFormat inserts a format (formatID "") or replaces one. Takes a context, querier, format ID and request; returns
+// the format's ID, pgx.ErrNoRows if there's no such format, or the database error (23505 if the name is taken).
+func dbSaveFormat(ctx context.Context, q db.Querier, formatID string, f formatRequest) (string, error) {
+	sql := `INSERT INTO event_formats (name, base_price_cents) VALUES (@name, @price) RETURNING format_id`
+	if formatID != "" {
+		sql = `UPDATE event_formats SET name = @name, base_price_cents = @price WHERE format_id = @format_id RETURNING format_id`
+	}
+	rows, _ := q.Query(ctx, sql, pgx.NamedArgs{"format_id": formatID, "name": f.Name, "price": f.BasePriceCents})
+	return pgx.CollectExactlyOneRow(rows, pgx.RowTo[string])
+}
+
+// dbDeleteFormat deletes a format. Takes a context, querier and format ID; returns whether it existed, or the database
+// error (23503 if any showing, past or upcoming, uses it).
+func dbDeleteFormat(ctx context.Context, q db.Querier, formatID string) (bool, error) {
+	tag, err := q.Exec(ctx, `DELETE FROM event_formats WHERE format_id = $1`, formatID)
+	return tag.RowsAffected() == 1, err
+}
+
+// dbListSurcharges fetches what each seat type adds to a seat's price, in seat_type order. Takes a context and querier;
+// returns the surcharges or the database error.
+func dbListSurcharges(ctx context.Context, q db.Querier) ([]Surcharge, error) {
+	rows, _ := q.Query(ctx, `SELECT seat_type, surcharge_cents FROM seat_type_surcharges ORDER BY seat_type`)
+	return pgx.CollectRows(rows, pgx.RowToStructByName[Surcharge])
+}
+
+// dbSetSurcharge sets what a seat type adds to a seat's price. Takes a context, querier, seat type and cents; returns
+// whether the seat type exists, or the database error.
+func dbSetSurcharge(ctx context.Context, q db.Querier, seatType string, cents int) (bool, error) {
+	// Compared as text, so an unknown type is "not found" rather than an invalid enum value.
+	tag, err := q.Exec(ctx, `UPDATE seat_type_surcharges SET surcharge_cents = $2 WHERE seat_type::text = $1`, seatType, cents)
+	return tag.RowsAffected() == 1, err
 }
 
 // dbSaveMovie inserts a film (movieID "") or replaces one. A changed TMDB ID clears the fetched details, so
@@ -98,19 +140,19 @@ func dbOverlaps(ctx context.Context, q db.Querier, eventID, movieID, roomID stri
 }
 
 // dbSaveEvent inserts a showing (eventID "") or replaces one. Takes a context, querier, event ID and request; returns the
-// showing's ID, or the database error (23503 if the film or room doesn't exist).
+// showing's ID, or the database error (23503 if the film, room or format doesn't exist).
 func dbSaveEvent(ctx context.Context, q db.Querier, eventID string, e eventRequest) (string, error) {
 	sql := `
-	INSERT INTO events (movie_id, room_id, starts_at, price_cents) VALUES (@movie_id, @room_id, @starts_at, @price_cents)
+	INSERT INTO events (movie_id, room_id, starts_at, format_id) VALUES (@movie_id, @room_id, @starts_at, @format_id)
 	RETURNING event_id`
 	if eventID != "" {
 		sql = `
-		UPDATE events SET movie_id = @movie_id, room_id = @room_id, starts_at = @starts_at, price_cents = @price_cents
+		UPDATE events SET movie_id = @movie_id, room_id = @room_id, starts_at = @starts_at, format_id = @format_id
 		WHERE event_id = @event_id
 		RETURNING event_id`
 	}
 	rows, _ := q.Query(ctx, sql, pgx.NamedArgs{
-		"event_id": eventID, "movie_id": e.MovieID, "room_id": e.RoomID, "starts_at": e.StartsAt, "price_cents": e.PriceCents,
+		"event_id": eventID, "movie_id": e.MovieID, "room_id": e.RoomID, "starts_at": e.StartsAt, "format_id": e.FormatID,
 	})
 	return pgx.CollectExactlyOneRow(rows, pgx.RowTo[string])
 }

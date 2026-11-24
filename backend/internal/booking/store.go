@@ -75,23 +75,26 @@ func Holders(ctx context.Context, eventID string, seatIDs []string) []string {
 	return holders
 }
 
-// dbFreeSeats counts the seats in seatIDs that are in the showing's room and not booked yet, with the room and seat price.
-// Returns pgx.ErrNoRows if there's no showing with that ID still to start.
+// dbFreeSeats counts the seats in seatIDs that are in the showing's room and not booked yet, with the room and what the
+// seats cost together. Returns pgx.ErrNoRows if there's no showing with that ID still to start.
 func dbFreeSeats(ctx context.Context, q db.Querier, eventID string, seatIDs []string) (freeSeats, error) {
 	rows, _ := q.Query(ctx, `
-	SELECT e.room_id, e.price_cents, count(s.seat_id) FILTER (WHERE bs.seat_id IS NULL) AS free
+	SELECT e.room_id, COALESCE(sum(f.base_price_cents + sts.surcharge_cents), 0) AS total_cents,
+	count(s.seat_id) FILTER (WHERE bs.seat_id IS NULL) AS free
 	FROM events e
+	JOIN event_formats f USING (format_id)
 	LEFT JOIN seats s ON s.room_id = e.room_id AND s.seat_id = ANY(@seat_ids::uuid[])
+	LEFT JOIN seat_type_surcharges sts ON sts.seat_type = s.seat_type
 	LEFT JOIN booking_seats bs ON bs.event_id = e.event_id AND bs.seat_id = s.seat_id
 	WHERE e.event_id = @event_id AND e.starts_at > now()
-	GROUP BY e.room_id, e.price_cents
+	GROUP BY e.room_id
 	`, pgx.NamedArgs{"event_id": eventID, "seat_ids": seatIDs})
 	return pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[freeSeats])
 }
 
-// dbCreateBooking inserts a booking and its seats. Takes the transaction, showing, its room, user, seats and the Stripe
-// payment ("" for none); returns the new booking ID, or the database error: a 23505 on booking_seats if a seat was sold
-// meanwhile, or on bookings_payment_intent_id_key if the payment is already booked.
+// dbCreateBooking inserts a booking and its seats, each at its price now. Takes the transaction, showing, its room, user,
+// seats and the Stripe payment ("" for none); returns the new booking ID, or the database error: a 23505 on booking_seats
+// if a seat was sold meanwhile, or on bookings_payment_intent_id_key if the payment is already booked.
 func dbCreateBooking(ctx context.Context, tx pgx.Tx, eventID, roomID, userID string, seatIDs []string, paymentIntentID string) (string, error) {
 	var bookingID string
 	err := tx.QueryRow(ctx, `
@@ -102,8 +105,10 @@ func dbCreateBooking(ctx context.Context, tx pgx.Tx, eventID, roomID, userID str
 		return "", err
 	}
 	_, err = tx.Exec(ctx, `
-	INSERT INTO booking_seats (booking_id, event_id, room_id, seat_id)
-	SELECT @booking_id, @event_id, @room_id, unnest(@seat_ids::uuid[])
+	INSERT INTO booking_seats (booking_id, event_id, room_id, seat_id, price_cents)
+	SELECT @booking_id, @event_id, @room_id, s.seat_id, f.base_price_cents + sts.surcharge_cents
+	FROM events e JOIN event_formats f USING (format_id), seats s JOIN seat_type_surcharges sts USING (seat_type)
+	WHERE e.event_id = @event_id AND s.seat_id = ANY(@seat_ids::uuid[])
 	`, pgx.NamedArgs{"booking_id": bookingID, "event_id": eventID, "room_id": roomID, "seat_ids": seatIDs})
 	return bookingID, err
 }
@@ -130,13 +135,13 @@ func dbLockBooking(ctx context.Context, tx pgx.Tx, bookingID, userID string, cut
 	return pgx.CollectExactlyOneRow(rows, pgx.RowToStructByName[lockedBooking])
 }
 
-// dbListUserBookings fetches the user's bookings, latest showing first, each with its film, screen, price and seats.
+// dbListUserBookings fetches the user's bookings, latest showing first, each with its film, screen, total paid and seats.
 // Ref is worked out as in refOf. Takes a context, querier, user ID and a ref to fetch just that booking ("" for all);
 // returns the bookings or the database error.
 func dbListUserBookings(ctx context.Context, q db.Querier, userID, ref string) ([]UserBooking, error) {
 	rows, _ := q.Query(ctx, `
 	SELECT b.booking_id, upper(right(b.booking_id::text, 8)) AS ref, e.event_id, m.title, e.starts_at,
-	r.name AS room, e.price_cents,
+	r.name AS room, sum(bs.price_cents) AS total_cents,
 	json_agg(json_build_object('row', s.row_label, 'number', s.seat_number) ORDER BY s.row_label, s.seat_number) AS seats
 	FROM bookings b
 	JOIN events e ON e.event_id = b.event_id

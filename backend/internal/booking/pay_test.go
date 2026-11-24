@@ -80,20 +80,22 @@ func TestPayAndCancel(t *testing.T) {
 	bob := one(`INSERT INTO users (first_name, last_name, email) VALUES ('B', 'B', 'bob@pay.test') RETURNING user_id`)
 	movie := one(`INSERT INTO movies (title, genre, runtime_minutes, rating) VALUES ('Pay test', 'Drama', 90, 'M') RETURNING movie_id`)
 	room := one(`INSERT INTO rooms (name, capacity) VALUES ('Pay test screen', 3) RETURNING room_id`)
+	format := one(`INSERT INTO event_formats (name, base_price_cents) VALUES ('Pay test', 1500) RETURNING format_id`)
 	t.Cleanup(func() {
 		db.Pool.Exec(ctx, `DELETE FROM outbox WHERE key = ANY($1::text[])`, []string{alice, bob})
 		db.Pool.Exec(ctx, `DELETE FROM users WHERE user_id = ANY($1::uuid[])`, []string{alice, bob}) // and their bookings
 		db.Pool.Exec(ctx, `DELETE FROM events WHERE room_id = $1`, room)
 		db.Pool.Exec(ctx, `DELETE FROM rooms WHERE room_id = $1`, room)
 		db.Pool.Exec(ctx, `DELETE FROM movies WHERE movie_id = $1`, movie)
+		db.Pool.Exec(ctx, `DELETE FROM event_formats WHERE format_id = $1`, format)
 	})
 	var seats []string
 	for _, n := range []int{1, 2, 3} {
 		seats = append(seats, one(`INSERT INTO seats (room_id, row_label, seat_number) VALUES ($1, 'A', $2) RETURNING seat_id`, room, n))
 	}
 	event := func(in time.Duration) string {
-		return one(`INSERT INTO events (starts_at, room_id, movie_id, price_cents) VALUES ($1, $2, $3, 1500) RETURNING event_id`,
-			time.Now().Add(in), room, movie)
+		return one(`INSERT INTO events (starts_at, room_id, movie_id, format_id) VALUES ($1, $2, $3, $4) RETURNING event_id`,
+			time.Now().Add(in), room, movie, format)
 	}
 	later, soon := event(3*time.Hour), event(30*time.Minute)
 	pay := func(id, eventID, userID string, amount int, seatIDs ...string) {

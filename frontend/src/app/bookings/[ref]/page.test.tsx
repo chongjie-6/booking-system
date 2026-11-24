@@ -21,7 +21,7 @@ const open = () =>
 it("shows the ticket for a booking opened from a link", async () => {
   const fetch = vi.fn(async () =>
     Response.json({
-      data: { bookingID: "b", ref: "AB12CD34", eventID: "e", title: "Toy Story", startsAt: "2026-06-01T09:00:00Z", room: "Screen 2", priceCents: 1500, seats: [{ row: "C", number: 4 }] },
+      data: { bookingID: "b", ref: "AB12CD34", eventID: "e", title: "Toy Story", startsAt: "2026-06-01T09:00:00Z", room: "Screen 2", totalCents: 1500, seats: [{ row: "C", number: 4 }] },
     }),
   );
   vi.stubGlobal("fetch", fetch);

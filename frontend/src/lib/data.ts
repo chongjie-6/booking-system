@@ -1,5 +1,5 @@
 // Shapes returned by GET /movies and GET /events/{id}/seats
-export type Showing = { eventID: string; startsAt: string; priceCents: number; room: string }
+export type Showing = { eventID: string; startsAt: string; format: string; room: string } // format e.g. 'IMAX'
 
 export type Movie = {
   movieID: string
@@ -20,10 +20,11 @@ export type Seat = {
   row: string
   number: number
   type: 'standard' | 'wheelchair' | 'companion' | 'premium'
+  priceCents: number // the showing's format price plus the seat type's surcharge
   taken: boolean
 }
 
-export type Showtime = { id: string; movie: Movie; start: Date; priceCents: number; room: string }
+export type Showtime = { id: string; movie: Movie; start: Date; format: string; room: string }
 
 export type Booking = { ref: string; name: string; email: string; showtime: Showtime; seats: Seat[] }
 
@@ -35,21 +36,31 @@ export type UserBooking = {
   title: string
   startsAt: string
   room: string
-  priceCents: number
+  totalCents: number // what the seats sold for
   seats: SeatPlace[]
 }
 
 // Shapes returned by GET /admin/movies and GET /admin/rooms. booked counts sold seats; a showing with any is locked.
-export type AdminShowing = { eventID: string; startsAt: string; priceCents: number; roomID: string; room: string; booked: number }
+export type AdminShowing = {
+  eventID: string
+  startsAt: string
+  formatID: string
+  format: string
+  roomID: string
+  room: string
+  booked: number
+}
 export type AdminMovie = Pick<Movie, 'movieID' | 'title' | 'genre' | 'runtimeMinutes' | 'rating' | 'synopsis' | 'featured'> & {
   tmdbID: number | null
   showings: AdminShowing[]
 }
 export type Room = { roomID: string; name: string; capacity: number }
+export type Format = { formatID: string; name: string; basePriceCents: number }
+export type Surcharge = { seatType: Seat['type']; surchargeCents: number }
 
 // What a ticket needs, so it can show a booking from the API as well as a showtime being booked
 export type SeatPlace = Pick<Seat, 'row' | 'number'>
-export type TicketShowtime = Pick<Showtime, 'start' | 'priceCents' | 'room'> & { movie: Pick<Movie, 'title'> }
+export type TicketShowtime = Pick<Showtime, 'start' | 'room'> & { movie: Pick<Movie, 'title'> }
 
 export const MAX_SEATS = 10
 
@@ -60,7 +71,7 @@ export function upcomingDays(count = 3): Date[] {
 }
 
 const toShowtime = (movie: Movie, s: Showing): Showtime =>
-  ({ id: s.eventID, movie, start: new Date(s.startsAt), priceCents: s.priceCents, room: s.room })
+  ({ id: s.eventID, movie, start: new Date(s.startsAt), format: s.format, room: s.room })
 
 export function showtimesFor(movie: Movie, day: Date): Showtime[] {
   return movie.showings.map((s) => toShowtime(movie, s)).filter((s) => s.start.toDateString() === day.toDateString())
@@ -95,7 +106,6 @@ export function splitBookings(bookings: UserBooking[], now: number) {
 export const ticketShowtime = (b: UserBooking): TicketShowtime => ({
   movie: { title: b.title },
   start: new Date(b.startsAt),
-  priceCents: b.priceCents,
   room: b.room,
 })
 
@@ -103,7 +113,8 @@ export const ticketShowtime = (b: UserBooking): TicketShowtime => ({
 export const canCancel = (b: Pick<UserBooking, 'startsAt'>, now: number) => Date.parse(b.startsAt) - now > 60 * 60 * 1000
 
 export const seatLabel = (s: SeatPlace) => `${s.row}${s.number}`
-export const total = (showtime: Pick<Showtime, 'priceCents'>, seats: number) => money.format((showtime.priceCents * seats) / 100)
+export const totalCents = (seats: Pick<Seat, 'priceCents'>[]) => seats.reduce((t, s) => t + s.priceCents, 0)
+export const total = (seats: Pick<Seat, 'priceCents'>[]) => money.format(totalCents(seats) / 100)
 
 // An ISO time as a datetime-local input's value, in the browser's time zone, e.g. 2026-11-24T19:30.
 export function toLocalInput(iso: string) {

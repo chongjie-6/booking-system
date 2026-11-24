@@ -3,7 +3,7 @@ import { Link, useLocation, useParams } from "react-router";
 import { api } from "@/lib/api";
 import { Steps } from "@/components/Steps";
 import { Ticket } from "@/components/Ticket";
-import { ticketShowtime, type UserBooking } from "@/lib/data";
+import { ticketShowtime, totalCents, type UserBooking } from "@/lib/data";
 import { useTitle, type Entry } from "@/lib/routes";
 
 // Straight after booking, this tab's history holds the booking. Opened from a link, it's fetched; signed out, it can't be.
@@ -31,13 +31,14 @@ export default function Done() {
           <Ticket
             showtime={booking.showtime}
             seats={booking.seats}
+            totalCents={totalCents(booking.seats)}
             bookingRef={booking.ref}
           />
         </>
       ) : fetched ? (
         <>
           <p>Your tickets were emailed to you. Show reference {fetched.ref} at the door.</p>
-          <Ticket showtime={ticketShowtime(fetched)} seats={fetched.seats} bookingRef={fetched.ref} />
+          <Ticket showtime={ticketShowtime(fetched)} seats={fetched.seats} totalCents={fetched.totalCents} bookingRef={fetched.ref} />
         </>
       ) : fetched === null ? (
         <p>

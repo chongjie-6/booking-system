@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { loadStripe, type Stripe, type StripeElements, type StripePaymentElement } from "@stripe/stripe-js";
 import { api, ApiError, type User } from "@/lib/api";
 import { Auth } from "@/components/Auth";
-import { total, type Seat, type Showtime } from "@/lib/data";
+import { total, totalCents, type Seat, type Showtime } from "@/lib/data";
 import { Steps } from "@/components/Steps";
 import { Ticket } from "@/components/Ticket";
 
@@ -189,7 +189,7 @@ export default function Checkout({
                 onClick={() => (shown ? retry(user) : pay(user))}
                 disabled={busy || (!card && !shown)}
               >
-                {busy ? "Paying…" : shown ? "Try again" : `Pay ${total(showtime, seats.length)}`}
+                {busy ? "Paying…" : shown ? "Try again" : `Pay ${total(seats)}`}
               </button>
             )}
           </div>
@@ -200,7 +200,7 @@ export default function Checkout({
             Loading…
           </p>
         )}
-        <Ticket showtime={showtime} seats={seats} />
+        <Ticket showtime={showtime} seats={seats} totalCents={totalCents(seats)} />
       </div>
     </main>
   );
