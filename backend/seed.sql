@@ -174,7 +174,7 @@ JOIN seats s ON s.room_id = e.room_id AND s.row_label = chr(65 + u.n::int) AND s
 JOIN seat_type_surcharges sts USING (seat_type);
 
 -- ---------------------------------------------------------------------------------------------------------------------
--- Bulk data, to see how the app behaves at a realistic size: 2,000 real films, four showings a day for two weeks on
+-- Bulk data, to see how the app behaves at a realistic size: 2,000 real films (about 50 of them showing in any week), four showings a day for two weeks on
 -- every bulk screen (~8,400), 5,000 users who can't log in (no password) and ~90,000 unpaid two-seat bookings. setseed keeps it the same on every run.
 -- ---------------------------------------------------------------------------------------------------------------------
 SELECT setseed(0.42);
@@ -2208,12 +2208,28 @@ WITH ins AS (
 SELECT row_number() OVER () AS n, movie_id FROM ins;
 CREATE UNIQUE INDEX ON bulk_movies (n);
 
--- Every bulk screen, every day for two weeks, at 10:00, 13:30, 17:00 and 20:30, each showing a random film.
--- About one in seven is 3D, IMAX or 4D.
-INSERT INTO events (movie_id, room_id, format_id, starts_at)
-SELECT bm.movie_id, x.room_id, f.format_id, x.starts_at
+-- What's on, like a real chain: the other ~1,940 films are back catalogue with no showings. 60 films are in the national
+-- slate (featured ones first). Week one shows slate 1-50 and week two 11-60, so 10 films close and 10 open. Each cinema
+-- shows 18 of its week's 50, always including the featured ones.
+CREATE TEMP TABLE slate ON COMMIT DROP AS
+SELECT row_number() OVER () AS k, movie_id
+FROM (SELECT bm.movie_id FROM bulk_movies bm JOIN movies m USING (movie_id) ORDER BY m.featured DESC, random() LIMIT 60) AS s;
+
+CREATE TEMP TABLE lineup ON COMMIT DROP AS
+SELECT cinema_id, w, i, movie_id
 FROM (
-    SELECT r.room_id, 1 + floor(random() * 2000)::int AS mn,
+    SELECT c.cinema_id, w, s.movie_id, row_number() OVER (PARTITION BY c.cinema_id, w ORDER BY s.k <= 5 DESC, random()) AS i
+    FROM cinemas c, generate_series(0, 1) AS w, slate s
+    WHERE c.name NOT IN ('Melbourne Central', 'Mildura') AND s.k BETWEEN 1 + 10 * w AND 50 + 10 * w
+) AS l
+WHERE i <= 18;
+
+-- Every bulk screen, every day for two weeks, at 10:00, 13:30, 17:00 and 20:30, each showing a random film from its
+-- cinema's lineup that week. About one in seven is 3D, IMAX or 4D.
+INSERT INTO events (movie_id, room_id, format_id, starts_at)
+SELECT l.movie_id, x.room_id, f.format_id, x.starts_at
+FROM (
+    SELECT r.room_id, r.cinema_id, d / 7 AS w, 1 + floor(random() * 18)::int AS i,
         CASE WHEN random() < 0.86 THEN 'Standard' ELSE (ARRAY['3D', 'IMAX', '4D'])[1 + floor(random() * 3)::int] END AS format,
         ((now() AT TIME ZONE 'Australia/Sydney')::date + d + t) AT TIME ZONE 'Australia/Sydney' AS starts_at
     FROM rooms r
@@ -2222,7 +2238,7 @@ FROM (
     unnest(ARRAY['10:00', '13:30', '17:00', '20:30']::time[]) AS t
     WHERE c.name NOT IN ('Melbourne Central', 'Mildura')
 ) AS x
-JOIN bulk_movies bm ON bm.n = x.mn
+JOIN lineup l USING (cinema_id, w, i)
 JOIN event_formats f ON f.name = x.format;
 
 -- Bookings of seat pairs (1-2, 3-4, ...) by random bulk users. Each showing gets its own fill rate, 0-40%, so some are

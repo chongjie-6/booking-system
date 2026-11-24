@@ -44,7 +44,7 @@ On every `up`, the one-off `connect-init` service registers the outbox connector
 
 Postgres needs `wal_level=logical` for Debezium, which the compose file sets.
 
-For films to book, load the dev seed once the migrations have run: 5 films, 3 screens and a week of showings from today. It wipes all movies, rooms, showings and bookings first, so re-run it to move the showings forward (Git Bash):
+For films to book, `docker compose up` loads the dev seed once the migrations have run (`docker compose logs seed` shows how it went). It has 15 hand-picked films at 2 cinemas, plus a bulk load at a realistic size: 2,000 real TMDB films, 23 more cinemas of 6 screens, 5,000 users and ~96,000 bookings, all over two weeks of showings from today. Like a real chain, only about 50 films are showing in any week (each cinema shows 18 of them, and 10 change over in week two); the rest are back catalogue. The seed wipes all movies, cinemas, showings and bookings first, so re-run it to move the showings forward. By hand (Git Bash):
 
 ```sh
 docker compose exec -T postgres psql -U booking -d booking < backend/seed.sql
@@ -93,7 +93,7 @@ DATABASE_URL=postgres://booking:booking@localhost:5432/booking go test ./...
 docker compose --profile app up -d --build
 ```
 
-and open http://localhost:8081. Compose points the backend at its own Postgres, Redis and Kafka, so the connection settings in `.env` are overridden. It waits for Postgres to be healthy before starting the backend, and restarts the backend if it exits. Load the seed as above.
+and open http://localhost:8081. Compose points the backend at its own Postgres, Redis and Kafka, so the connection settings in `.env` are overridden. It waits for Postgres to be healthy before starting the backend, and restarts the backend if it exits, and loads the seed as above.
 
 ### Payments
 
