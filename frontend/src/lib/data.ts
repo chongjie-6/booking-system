@@ -1,5 +1,6 @@
 // Shapes returned by GET /movies and GET /events/{id}/seats
-export type Showing = { eventID: string; startsAt: string; format: string; room: string } // format e.g. 'IMAX'
+// format e.g. 'IMAX'; cinemaID and cinema are the site the room is in
+export type Showing = { eventID: string; startsAt: string; format: string; room: string; cinemaID: string; cinema: string }
 
 export type Movie = {
   movieID: string
@@ -15,6 +16,20 @@ export type Movie = {
   showings: Showing[]
 }
 
+// Shape returned by GET /cinemas, by name. lat and lng are WGS84 degrees.
+export type Cinema = { cinemaID: string; name: string; address: string; city: string; state: string; lat: number; lng: number }
+export type Place = Pick<Cinema, 'lat' | 'lng'>
+
+// Kilometres between two places along the Earth's surface (haversine, on a sphere: within 0.5% of the real ellipsoid).
+export function distanceKm(a: Place, b: Place): number {
+  const rad = (deg: number) => (deg * Math.PI) / 180
+  const h = Math.sin(rad(b.lat - a.lat) / 2) ** 2 +
+    Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(rad(b.lng - a.lng) / 2) ** 2
+  return 2 * 6371 * Math.asin(Math.sqrt(h))
+}
+
+export const formatKm = (km: number) => (km < 1 ? 'Under 1 km' : `${Math.round(km).toLocaleString('en-AU')} km`)
+
 export type Seat = {
   seatID: string
   row: string
@@ -24,7 +39,7 @@ export type Seat = {
   taken: boolean
 }
 
-export type Showtime = { id: string; movie: Movie; start: Date; format: string; room: string }
+export type Showtime = { id: string; movie: Movie; start: Date; format: string; room: string; cinemaID: string; cinema: string }
 
 export type Booking = { ref: string; name: string; email: string; showtime: Showtime; seats: Seat[] }
 
@@ -71,10 +86,48 @@ export function upcomingDays(count = 3): Date[] {
 }
 
 const toShowtime = (movie: Movie, s: Showing): Showtime =>
-  ({ id: s.eventID, movie, start: new Date(s.startsAt), format: s.format, room: s.room })
+  ({ id: s.eventID, movie, start: new Date(s.startsAt), format: s.format, room: s.room, cinemaID: s.cinemaID, cinema: s.cinema })
 
 export function showtimesFor(movie: Movie, day: Date): Showtime[] {
   return movie.showings.map((s) => toShowtime(movie, s)).filter((s) => s.start.toDateString() === day.toDateString())
+}
+
+// What the quick-book bar searches for, kept in the sessions page's URL. An empty list matches anything;
+// cinemas and movies are IDs, days are dayKeys.
+export type SessionSearch = { cinemas: string[]; movies: string[]; days: string[]; times: TimeOfDay[] }
+export const TIMES = { morning: 'Before 12pm', afternoon: '12pm to 5pm', evening: 'After 5pm' }
+export type TimeOfDay = keyof typeof TIMES
+export const MAX_CINEMAS = 5
+
+// The cinemas last chosen in the quick-book bar, so it starts on them next visit.
+export const savedCinemas = () => localStorage.getItem('cinemas')?.split(',').filter(Boolean) ?? []
+
+export const timeOfDay = (d: Date): TimeOfDay => (d.getHours() < 12 ? 'morning' : d.getHours() < 17 ? 'afternoon' : 'evening')
+// A date as YYYY-MM-DD in the browser's time zone.
+export const dayKey = (d: Date) => toLocalInput(d.toISOString()).slice(0, 10)
+
+// Every showing still to start that matches the search, in the movies' order then soonest first.
+export function findSessions(movies: Movie[], q: SessionSearch, now: Date): Showtime[] {
+  const any = <T>(list: T[], v: T) => !list.length || list.includes(v)
+  return movies
+    .flatMap((m) => m.showings.map((s) => toShowtime(m, s)))
+    .filter((s) => s.start > now && any(q.cinemas, s.cinemaID) && any(q.movies, s.movie.movieID) &&
+      any(q.days, dayKey(s.start)) && any(q.times, timeOfDay(s.start)))
+}
+
+export function toParams(q: SessionSearch) {
+  return new URLSearchParams(Object.entries(q).filter(([, v]) => v.length).map(([k, v]) => [k, v.join(',')]))
+}
+
+// Reads a search back from a URL, which anyone can edit, so unknown times are dropped.
+export function fromParams(p: URLSearchParams): SessionSearch {
+  const list = (key: string) => p.get(key)?.split(',').filter(Boolean) ?? []
+  return {
+    cinemas: list('cinemas'),
+    movies: list('movies'),
+    days: list('days'),
+    times: list('times').filter((t): t is TimeOfDay => Object.hasOwn(TIMES, t)),
+  }
 }
 
 export function findShowtime(movies: Movie[], eventID: string): Showtime | undefined {

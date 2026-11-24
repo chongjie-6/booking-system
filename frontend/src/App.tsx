@@ -28,6 +28,7 @@ import Films from "@/app/movies/page";
 import Account from "@/app/account/page";
 import Admin from "@/app/admin/page";
 import SeatPicker from "@/app/sessions/[eventID]/page";
+import Sessions from "@/app/sessions/page";
 import { useTitle, type Entry } from "@/lib/routes";
 
 // A reset email links to /#reset=<token>. Read it once, then drop it from the address bar and history.
@@ -194,6 +195,10 @@ export default function App() {
               }
             />
           ))}
+          <Route
+            path="/sessions"
+            element={<Sessions movies={movies} onRetry={retryMovies} />}
+          />
           <Route
             path="/sessions/:eventID"
             element={

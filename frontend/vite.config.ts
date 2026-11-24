@@ -23,7 +23,7 @@ export default defineConfig({
   ],
   server: {
     proxy: {
-      '/auth': api, '/user': api, '/movies': api, '/events': api, '/bookings': api, '/payments': api, '/admin': api,
+      '/auth': api, '/user': api, '/cinemas': api, '/movies': api, '/events': api, '/bookings': api, '/payments': api, '/admin': api,
     },
   },
 })

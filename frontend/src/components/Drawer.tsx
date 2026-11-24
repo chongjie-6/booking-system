@@ -1,12 +1,15 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
-// A modal panel that slides in from the right. Closes on Esc, the close button, or a click on the backdrop.
+// A modal panel that slides in from the right, or with className="modal" rises in the middle. Closes on Esc, the close button,
+// or a click on the backdrop.
 export function Drawer({
   open,
   onClose,
+  className = "",
   children,
 }: {
   open: boolean;
+  className?: string;
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -20,7 +23,7 @@ export function Drawer({
   return (
     <dialog
       ref={ref}
-      className="drawer"
+      className={`drawer ${className}`}
       onClose={onClose}
       onClick={(e) => e.target === e.currentTarget && ref.current?.close()}
     >

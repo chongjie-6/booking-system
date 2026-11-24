@@ -13,12 +13,14 @@ const movieQuery = `
 	COALESCE(m.poster_path, '') AS poster_path, COALESCE(m.backdrop_path, '') AS backdrop_path,
 	COALESCE(m.trailer_key, '') AS trailer_key,
 	json_agg(json_build_object(
-		'eventID', e.event_id, 'startsAt', e.starts_at, 'format', f.name, 'room', r.name
+		'eventID', e.event_id, 'startsAt', e.starts_at, 'format', f.name, 'room', r.name,
+		'cinemaID', c.cinema_id, 'cinema', c.name
 	) ORDER BY e.starts_at) AS showings
 	FROM movies m
 	JOIN events e USING (movie_id)
 	JOIN event_formats f USING (format_id)
 	JOIN rooms r USING (room_id)
+	JOIN cinemas c ON c.cinema_id = r.cinema_id
 	`
 
 // dbListMovies fetches every movie that has a showing in the next 3 days, with those showings. Three days covers the
@@ -43,6 +45,12 @@ func dbComingSoon(ctx context.Context) ([]Movie, error) {
 	ORDER BY min(e.starts_at), m.title
 	`)
 	return pgx.CollectRows(rows, pgx.RowToStructByName[Movie])
+}
+
+// dbListCinemas fetches every cinema. Takes a context; returns them by name, or the database error.
+func dbListCinemas(ctx context.Context) ([]Cinema, error) {
+	rows, _ := db.Pool.Query(ctx, `SELECT cinema_id, name, address, city, state, lat, lng FROM cinemas ORDER BY name`)
+	return pgx.CollectRows(rows, pgx.RowToStructByName[Cinema])
 }
 
 // dbListSeats fetches every seat in a showing's room with its price, marking the ones already booked for that showing.

@@ -30,6 +30,16 @@ func ComingSoon(w http.ResponseWriter, r *http.Request) {
 	response.Ok(w, movies, nil)
 }
 
+// ListCinemas returns every cinema. Takes the request; responds 200 with the cinemas by name, or 500.
+func ListCinemas(w http.ResponseWriter, r *http.Request) {
+	cinemas, err := dbListCinemas(r.Context())
+	if err != nil {
+		response.Error(w, err)
+		return
+	}
+	response.Ok(w, cinemas, nil)
+}
+
 // ListSeats returns a showing's seats and which are taken. Takes the request with the event ID in the path;
 // responds 200 with the seats, 404 if there's no such showing (or the ID isn't a UUID), or 500.
 func ListSeats(w http.ResponseWriter, r *http.Request) {

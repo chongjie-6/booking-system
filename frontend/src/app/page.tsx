@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { api } from "@/lib/api";
-import { formatDay, formatRuntime, type Movie } from "@/lib/data";
+import { formatDay, formatRuntime, savedCinemas, type Movie } from "@/lib/data";
 import { Poster } from "@/components/Poster";
 import { Carousel } from "@/components/Carousel";
 import { Hero } from "@/components/Hero";
 import { MoviesStatus } from "@/components/MoviesStatus";
+import { QuickBook } from "@/components/QuickBook";
 import { TmdbCredit } from "@/components/Poster";
 import { useTitle } from "@/lib/routes";
 
@@ -26,6 +27,7 @@ export default function Home({
   return (
     <>
       <Hero movies={movies?.filter((m) => m.featured) ?? []} />
+      <QuickBook movies={movies} initial={{ cinemas: savedCinemas(), movies: [], days: [], times: [] }} />
       <main>
         <div className="section-head">
           <h1 tabIndex={-1}>Now showing</h1>
