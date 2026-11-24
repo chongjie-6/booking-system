@@ -1,15 +1,22 @@
 -- Dev data: 15 films (details and posters filled from TMDB when TMDB_TOKEN is set), 6 screens of 8 rows x 14 seats,
 -- two weeks of showings from today (Sydney time), and a few upcoming bookings for each existing user. Four films open
 -- 5 to 11 days out, so the home page has some coming soon.
--- Wipes all movies, rooms, showings and bookings first (users are kept), so re-run it to move the showings forward.
+-- Wipes all movies, cinemas, rooms, showings and bookings first (users are kept), so re-run it to move the showings forward.
 -- Never run it on production. `docker compose up` runs it once the server has applied the migrations; by hand (Git Bash):
 --   docker compose exec -T postgres psql -U booking -d booking < backend/seed.sql
 BEGIN;
 
-TRUNCATE movies, rooms CASCADE; -- also empties events, seats, bookings and booking_seats
+TRUNCATE movies, cinemas CASCADE; -- also empties rooms, events, seats, bookings and booking_seats
 
-INSERT INTO rooms (name, capacity) VALUES
-    ('Screen 1', 112), ('Screen 2', 112), ('Screen 3', 112), ('Screen 4', 112), ('Screen 5', 112), ('Screen 6', 112);
+-- A city site that charges more and a country one that doesn't. Screen names stay unique so showings below can find them.
+INSERT INTO cinemas (name, surcharge_cents, address, city, state, country, postal_code, lat, lng) VALUES
+    ('Melbourne Central', 400, '211 La Trobe Street', 'Melbourne', 'VIC', 'AU', '3000', -37.8102, 144.9628),
+    ('Mildura', 0, '18 Langtree Avenue', 'Mildura', 'VIC', 'AU', '3500', -34.1855, 142.1610);
+INSERT INTO rooms (cinema_id, name, capacity)
+SELECT c.cinema_id, r.name, 112
+FROM (VALUES ('Melbourne Central', 'Screen 1'), ('Melbourne Central', 'Screen 2'), ('Melbourne Central', 'Screen 3'),
+    ('Mildura', 'Screen 4'), ('Mildura', 'Screen 5'), ('Mildura', 'Screen 6')) AS r (cinema, name)
+JOIN cinemas c ON c.name = r.cinema;
 
 INSERT INTO seats (room_id, row_label, seat_number, seat_type)
 SELECT r.room_id, row_label, n,

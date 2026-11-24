@@ -28,7 +28,7 @@ type ticket struct {
 }
 
 // dbGetTicket fetches a booking's film, time, screen, format, seats and total. Takes a context and booking ID; returns the ticket or the database error.
-// ponytail: the cinema's time zone is fixed to Sydney, like the dev seed; store it on rooms if cinemas in other zones join.
+// ponytail: the cinema's time zone is fixed to Sydney, like the dev seed; store it on cinemas if one in another zone joins.
 func dbGetTicket(ctx context.Context, bookingID string) (ticket, error) {
 	var t ticket
 	err := db.Pool.QueryRow(ctx, `

@@ -79,10 +79,12 @@ func Holders(ctx context.Context, eventID string, seatIDs []string) []string {
 // seats cost together. Returns pgx.ErrNoRows if there's no showing with that ID still to start.
 func dbFreeSeats(ctx context.Context, q db.Querier, eventID string, seatIDs []string) (freeSeats, error) {
 	rows, _ := q.Query(ctx, `
-	SELECT e.room_id, COALESCE(sum(f.base_price_cents + sts.surcharge_cents), 0) AS total_cents,
+	SELECT e.room_id, COALESCE(sum(f.base_price_cents + sts.surcharge_cents + c.surcharge_cents), 0) AS total_cents,
 	count(s.seat_id) FILTER (WHERE bs.seat_id IS NULL) AS free
 	FROM events e
 	JOIN event_formats f USING (format_id)
+	JOIN rooms r ON r.room_id = e.room_id
+	JOIN cinemas c ON c.cinema_id = r.cinema_id
 	LEFT JOIN seats s ON s.room_id = e.room_id AND s.seat_id = ANY(@seat_ids::uuid[])
 	LEFT JOIN seat_type_surcharges sts ON sts.seat_type = s.seat_type
 	LEFT JOIN booking_seats bs ON bs.event_id = e.event_id AND bs.seat_id = s.seat_id
@@ -106,8 +108,12 @@ func dbCreateBooking(ctx context.Context, tx pgx.Tx, eventID, roomID, userID str
 	}
 	_, err = tx.Exec(ctx, `
 	INSERT INTO booking_seats (booking_id, event_id, room_id, seat_id, price_cents)
-	SELECT @booking_id, @event_id, @room_id, s.seat_id, f.base_price_cents + sts.surcharge_cents
-	FROM events e JOIN event_formats f USING (format_id), seats s JOIN seat_type_surcharges sts USING (seat_type)
+	SELECT @booking_id, @event_id, @room_id, s.seat_id, f.base_price_cents + sts.surcharge_cents + c.surcharge_cents
+	FROM events e
+	JOIN event_formats f USING (format_id)
+	JOIN rooms r ON r.room_id = e.room_id
+	JOIN cinemas c ON c.cinema_id = r.cinema_id,
+	seats s JOIN seat_type_surcharges sts USING (seat_type)
 	WHERE e.event_id = @event_id AND s.seat_id = ANY(@seat_ids::uuid[])
 	`, pgx.NamedArgs{"booking_id": bookingID, "event_id": eventID, "room_id": roomID, "seat_ids": seatIDs})
 	return bookingID, err

@@ -49,11 +49,13 @@ func dbComingSoon(ctx context.Context) ([]Movie, error) {
 // Takes a context and event ID; returns the seats by row then number, or none if the showing doesn't exist.
 func dbListSeats(ctx context.Context, eventID string) ([]Seat, error) {
 	rows, _ := db.Pool.Query(ctx, `
-	SELECT s.seat_id, s.row_label, s.seat_number, s.seat_type, f.base_price_cents + sts.surcharge_cents AS price_cents,
-	bs.seat_id IS NOT NULL AS taken
+	SELECT s.seat_id, s.row_label, s.seat_number, s.seat_type,
+	f.base_price_cents + sts.surcharge_cents + c.surcharge_cents AS price_cents, bs.seat_id IS NOT NULL AS taken
 	FROM events e
 	JOIN event_formats f USING (format_id)
-	JOIN seats s USING (room_id)
+	JOIN rooms r ON r.room_id = e.room_id
+	JOIN cinemas c ON c.cinema_id = r.cinema_id
+	JOIN seats s ON s.room_id = e.room_id
 	JOIN seat_type_surcharges sts USING (seat_type)
 	LEFT JOIN booking_seats bs ON bs.event_id = e.event_id AND bs.seat_id = s.seat_id
 	WHERE e.event_id = @event_id

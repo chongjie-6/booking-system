@@ -36,7 +36,9 @@ func TestShowings(t *testing.T) {
 	}
 
 	var room, user, format string
-	db.Pool.QueryRow(ctx, `INSERT INTO rooms (name, capacity) VALUES ('Admin test screen', 1) RETURNING room_id`).Scan(&room)
+	db.Pool.QueryRow(ctx, `WITH c AS (INSERT INTO cinemas (name, address, city, state, country, postal_code, lat, lng)
+		VALUES ('Admin test', '1 Test St', 'Melbourne', 'VIC', 'AU', '3000', -37.81, 144.96) RETURNING cinema_id)
+ INSERT INTO rooms (cinema_id, name, capacity) SELECT cinema_id, 'Admin test screen', 1 FROM c RETURNING room_id`).Scan(&room)
 	db.Pool.QueryRow(ctx, `INSERT INTO event_formats (name, base_price_cents) VALUES ('Admin test', 1500) RETURNING format_id`).Scan(&format)
 	db.Pool.QueryRow(ctx, `INSERT INTO users (first_name, last_name, email) VALUES ('A', 'A', 'a@admin.test') RETURNING user_id`).Scan(&user)
 	status, movie := call(CreateMovie, http.MethodPost, "", movieRequest{Title: "Admin test", Genre: "Drama", RuntimeMinutes: 90, Rating: "M"})
@@ -47,6 +49,7 @@ func TestShowings(t *testing.T) {
 		db.Pool.Exec(ctx, `DELETE FROM users WHERE user_id = $1`, user)
 		db.Pool.Exec(ctx, `DELETE FROM events WHERE room_id = $1`, room)
 		db.Pool.Exec(ctx, `DELETE FROM rooms WHERE room_id = $1`, room)
+		db.Pool.Exec(ctx, `DELETE FROM cinemas WHERE name = 'Admin test'`)
 		db.Pool.Exec(ctx, `DELETE FROM movies WHERE movie_id = $1`, movie)
 		db.Pool.Exec(ctx, `DELETE FROM event_formats WHERE format_id = $1`, format)
 	})
@@ -111,7 +114,7 @@ func TestShowings(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, m := range movies {
-		if m.MovieID == movie && (len(m.Showings) != 1 || m.Showings[0].EventID != first || m.Showings[0].Room != "Admin test screen") {
+		if m.MovieID == movie && (len(m.Showings) != 1 || m.Showings[0].EventID != first || m.Showings[0].Room != "Admin test · Admin test screen") {
 			t.Fatalf("listed showings = %+v, want just the booked one", m.Showings)
 		}
 	}

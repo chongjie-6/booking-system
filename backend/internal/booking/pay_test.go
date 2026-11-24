@@ -79,13 +79,16 @@ func TestPayAndCancel(t *testing.T) {
 	alice := one(`INSERT INTO users (first_name, last_name, email) VALUES ('A', 'A', 'alice@pay.test') RETURNING user_id`)
 	bob := one(`INSERT INTO users (first_name, last_name, email) VALUES ('B', 'B', 'bob@pay.test') RETURNING user_id`)
 	movie := one(`INSERT INTO movies (title, genre, runtime_minutes, rating) VALUES ('Pay test', 'Drama', 90, 'M') RETURNING movie_id`)
-	room := one(`INSERT INTO rooms (name, capacity) VALUES ('Pay test screen', 3) RETURNING room_id`)
+	room := one(`WITH c AS (INSERT INTO cinemas (name, address, city, state, country, postal_code, lat, lng)
+		VALUES ('Pay test', '1 Test St', 'Melbourne', 'VIC', 'AU', '3000', -37.81, 144.96) RETURNING cinema_id)
+ INSERT INTO rooms (cinema_id, name, capacity) SELECT cinema_id, 'Pay test screen', 3 FROM c RETURNING room_id`)
 	format := one(`INSERT INTO event_formats (name, base_price_cents) VALUES ('Pay test', 1500) RETURNING format_id`)
 	t.Cleanup(func() {
 		db.Pool.Exec(ctx, `DELETE FROM outbox WHERE key = ANY($1::text[])`, []string{alice, bob})
 		db.Pool.Exec(ctx, `DELETE FROM users WHERE user_id = ANY($1::uuid[])`, []string{alice, bob}) // and their bookings
 		db.Pool.Exec(ctx, `DELETE FROM events WHERE room_id = $1`, room)
 		db.Pool.Exec(ctx, `DELETE FROM rooms WHERE room_id = $1`, room)
+		db.Pool.Exec(ctx, `DELETE FROM cinemas WHERE name = 'Pay test'`)
 		db.Pool.Exec(ctx, `DELETE FROM movies WHERE movie_id = $1`, movie)
 		db.Pool.Exec(ctx, `DELETE FROM event_formats WHERE format_id = $1`, format)
 	})

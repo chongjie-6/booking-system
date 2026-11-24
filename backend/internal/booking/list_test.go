@@ -37,7 +37,9 @@ func TestListUserBookings(t *testing.T) {
 	alice := one(`INSERT INTO users (first_name, last_name, email) VALUES ('A', 'A', 'alice@list.test') RETURNING user_id`)
 	bob := one(`INSERT INTO users (first_name, last_name, email) VALUES ('B', 'B', 'bob@list.test') RETURNING user_id`)
 	movie := one(`INSERT INTO movies (title, genre, runtime_minutes, rating) VALUES ('Film', 'Drama', 90, 'M') RETURNING movie_id`)
-	room := one(`INSERT INTO rooms (name, capacity) VALUES ('List test screen', 3) RETURNING room_id`)
+	room := one(`WITH c AS (INSERT INTO cinemas (name, surcharge_cents, address, city, state, country, postal_code, lat, lng)
+		VALUES ('List test', 200, '1 Test St', 'Melbourne', 'VIC', 'AU', '3000', -37.81, 144.96) RETURNING cinema_id)
+		INSERT INTO rooms (cinema_id, name, capacity) SELECT cinema_id, 'List test screen', 3 FROM c RETURNING room_id`)
 	seats := map[string]string{}
 	for _, n := range []int{1, 2} {
 		seats["A"+strconv.Itoa(n)] = one(`INSERT INTO seats (room_id, row_label, seat_number) VALUES ($1, 'A', $2) RETURNING seat_id`, room, n)
@@ -66,7 +68,8 @@ func TestListUserBookings(t *testing.T) {
 	book(later, alice, "A2")
 	book(soon, bob, "A2")
 	// Bookings keep what they sold for.
-	if _, err := tx.Exec(ctx, `UPDATE event_formats SET base_price_cents = 9900; UPDATE seat_type_surcharges SET surcharge_cents = 0`); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE event_formats SET base_price_cents = 9900; UPDATE seat_type_surcharges SET surcharge_cents = 0;
+		UPDATE cinemas SET surcharge_cents = 0`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -84,7 +87,7 @@ func TestListUserBookings(t *testing.T) {
 	if want := strings.ToUpper(b.BookingID[len(b.BookingID)-8:]); b.Ref != want {
 		t.Errorf("ref = %q, want %q as Create makes it", b.Ref, want)
 	}
-	if b.Title != "Film" || b.Room != "List test screen" || b.TotalCents != 1500+1500+500 { // A3 is premium
+	if b.Title != "Film" || b.Room != "List test screen" || b.TotalCents != 1500+1500+500+2*200 { // A3 is premium; the cinema adds 200 a seat
 		t.Errorf("booking = %+v", b)
 	}
 	if len(b.Seats) != 2 || b.Seats[0] != (bookedSeat{"A", 1}) || b.Seats[1] != (bookedSeat{"A", 3}) {

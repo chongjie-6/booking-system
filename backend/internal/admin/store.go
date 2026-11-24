@@ -15,22 +15,25 @@ func dbListMovies(ctx context.Context, q db.Querier) ([]Movie, error) {
 	SELECT m.movie_id, m.title, m.genre, m.runtime_minutes, m.rating, m.synopsis, m.tmdb_id, m.featured,
 	COALESCE(json_agg(json_build_object(
 		'eventID', e.event_id, 'startsAt', e.starts_at, 'formatID', e.format_id, 'format', f.name,
-		'roomID', e.room_id, 'room', r.name,
+		'roomID', e.room_id, 'room', c.name || ' · ' || r.name,
 		'booked', (SELECT count(*) FROM booking_seats bs WHERE bs.event_id = e.event_id)
 	) ORDER BY e.starts_at) FILTER (WHERE e.event_id IS NOT NULL), '[]') AS showings
 	FROM movies m
 	LEFT JOIN events e ON e.movie_id = m.movie_id AND e.starts_at > now()
 	LEFT JOIN event_formats f ON f.format_id = e.format_id
 	LEFT JOIN rooms r ON r.room_id = e.room_id
+	LEFT JOIN cinemas c ON c.cinema_id = r.cinema_id
 	GROUP BY m.movie_id
 	ORDER BY m.title
 	`)
 	return pgx.CollectRows(rows, pgx.RowToStructByName[Movie])
 }
 
-// dbListRooms fetches every screen by name. Takes a context and querier; returns the rooms or the database error.
+// dbListRooms fetches every screen, named with its cinema, by cinema then name. Takes a context and querier; returns the rooms or the database error.
 func dbListRooms(ctx context.Context, q db.Querier) ([]Room, error) {
-	rows, _ := q.Query(ctx, `SELECT room_id, name, capacity FROM rooms ORDER BY name`)
+	rows, _ := q.Query(ctx, `
+	SELECT r.room_id, c.name || ' · ' || r.name AS name, r.capacity FROM rooms r JOIN cinemas c USING (cinema_id) ORDER BY c.name, r.name
+	`)
 	return pgx.CollectRows(rows, pgx.RowToStructByName[Room])
 }
 
