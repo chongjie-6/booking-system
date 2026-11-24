@@ -5,6 +5,7 @@ import { backdropURL, slug, type Movie } from "@/lib/data";
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 // How far a swipe has to travel before it turns the slide, rather than springing back.
 const SWIPE_PX = 50;
+const AUTO_MS = 30_000;
 
 // Full-width banner for the featured films: a muted trailer playing behind the text, else the backdrop.
 // With several films it swipes like the carousel, looping past either end.
@@ -16,11 +17,16 @@ export function Hero({ movies }: { movies: Movie[] }) {
   // How far the slides are being dragged, and the slide (-1, 0 or 1) they ease to once let go.
   const [dx, setDx] = useState(0);
   const [settle, setSettle] = useState<number | null>(null);
+  // The film a dot was pressed for: it stands in as the slide being eased to.
+  const [jump, setJump] = useState<number | null>(null);
   const drag = useRef({ active: false, moved: false, x: 0 });
   const n = movies.length;
   const loop = n > 1;
-  const at = (k: number) => movies[(((i + k) % n) + n) % n];
+  const at = (k: number) =>
+    jump !== null && k === settle ? movies[jump] : movies[(((i + k) % n) + n) % n];
   const shown = n > 0;
+  // The film being shown or eased to, so the dots move as soon as the slide does.
+  const to = settle === null ? i : jump ?? (((i + settle) % n) + n) % n;
 
   useEffect(() => {
     if (!ref.current) return;
@@ -32,10 +38,19 @@ export function Hero({ movies }: { movies: Movie[] }) {
     return () => io.disconnect();
   }, [shown]);
 
+  // Moves on to the next film by itself; any swipe or dot press restarts the wait.
+  const auto = loop && !reducedMotion;
+  useEffect(() => {
+    if (!auto || settle !== null || dx) return;
+    const t = setTimeout(() => setSettle(1), AUTO_MS);
+    return () => clearTimeout(t);
+  }, [auto, i, settle, dx]);
+
   if (!shown) return null;
 
   const finish = (dir: number) => {
-    setI((j) => (((j + dir) % n) + n) % n);
+    setI((j) => jump ?? (((j + dir) % n) + n) % n);
+    setJump(null);
     setDx(0);
     setSettle(null);
   };
@@ -137,8 +152,13 @@ export function Hero({ movies }: { movies: Movie[] }) {
               <button
                 key={m.movieID}
                 aria-label={`Show ${m.title}`}
-                aria-pressed={j === i}
-                onClick={() => settle === null && setI(j)}
+                aria-pressed={j === to}
+                onClick={() => {
+                  if (settle !== null || j === i) return;
+                  if (reducedMotion) return setI(j);
+                  setJump(j);
+                  setSettle(j > i ? 1 : -1);
+                }}
               />
             ))}
           </div>
