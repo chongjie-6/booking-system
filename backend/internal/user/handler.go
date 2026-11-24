@@ -46,7 +46,7 @@ func PatchUser(w http.ResponseWriter, r *http.Request) {
 
 	u, err := UpdateUserService(r.Context(), user.UserID, req)
 	if errors.Is(err, ErrEmailTaken) {
-		response.Error(w, response.NewError(http.StatusConflict, "email already in use"))
+		response.Error(w, response.NewError(http.StatusConflict, "Another account already uses this email."))
 		return
 	}
 	if errors.Is(err, pgx.ErrNoRows) {

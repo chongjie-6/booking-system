@@ -61,7 +61,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	}
 	newUser, err := user.CreateUserService(r.Context(), req)
 	if errors.Is(err, user.ErrEmailTaken) {
-		response.Error(w, response.NewError(http.StatusConflict, "user already exists"))
+		response.Error(w, response.NewError(http.StatusConflict, "An account with this email already exists. Try signing in instead."))
 		return
 	}
 	if err != nil {
@@ -72,7 +72,7 @@ func Register(w http.ResponseWriter, r *http.Request) {
 	tokens, err := issueUserTokens(r.Context(), db.Pool, newUser.UserID, newUser.UserRole, clientFrom(r))
 	if err != nil {
 		log.Printf("create user: %v", err)
-		response.Error(w, response.NewError(http.StatusInternalServerError, "account created, but we couldn't sign you in. Please log in"))
+		response.Error(w, response.NewError(http.StatusInternalServerError, "Your account was created, but we couldn't sign you in. Please sign in."))
 		return
 	}
 	setAuthCookies(w, tokens)
@@ -131,7 +131,7 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	tokens, err := ChangePasswordService(r.Context(), u, req, clientFrom(r))
 	if errors.Is(err, ErrWrongPassword) {
-		response.Error(w, response.NewError(http.StatusForbidden, "password is incorrect"))
+		response.Error(w, response.NewError(http.StatusForbidden, "Your current password is incorrect."))
 		return
 	}
 	if err != nil {
@@ -170,7 +170,7 @@ func ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	err := ResetPasswordService(r.Context(), req)
 	if errors.Is(err, ErrResetTokenInvalid) {
-		response.Error(w, response.NewError(http.StatusBadRequest, "this reset link is invalid or has expired. Request a new one"))
+		response.Error(w, response.NewError(http.StatusBadRequest, "This reset link is invalid or has expired. Please request a new one."))
 		return
 	}
 	if err != nil {
