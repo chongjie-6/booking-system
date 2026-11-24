@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -46,15 +47,23 @@ func FillFromTMDB(ctx context.Context) {
 		if err != nil {
 			log.Printf("tmdb: %v", err)
 		}
+		// 8 at a time: a freshly seeded 2,000 films fill in about a minute, under TMDB's ~40 requests a second.
+		var wg sync.WaitGroup
+		slots := make(chan struct{}, 8)
 		for movieID, tmdbID := range ids {
-			m, err := fetchTMDB(ctx, token, tmdbID)
-			if err == nil {
-				err = dbSetTMDB(ctx, movieID, m)
-			}
-			if err != nil {
-				log.Printf("tmdb movie %d: %v", tmdbID, err)
-			}
+			slots <- struct{}{}
+			wg.Go(func() {
+				defer func() { <-slots }()
+				m, err := fetchTMDB(ctx, token, tmdbID)
+				if err == nil {
+					err = dbSetTMDB(ctx, movieID, m)
+				}
+				if err != nil {
+					log.Printf("tmdb movie %d: %v", tmdbID, err)
+				}
+			})
 		}
+		wg.Wait()
 		select {
 		case <-ctx.Done():
 			return
