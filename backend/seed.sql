@@ -18,6 +18,20 @@ FROM (VALUES ('Melbourne Central', 'Screen 1'), ('Melbourne Central', 'Screen 2'
     ('Mildura', 'Screen 4'), ('Mildura', 'Screen 5'), ('Mildura', 'Screen 6')) AS r (cinema, name)
 JOIN cinemas c ON c.name = r.cinema;
 
+-- Open every day, half an hour before the first showing; the city site runs past midnight.
+INSERT INTO cinema_hours (cinema_id, weekday, opens, closes)
+SELECT c.cinema_id, d, h.opens::time, h.closes::time
+FROM (VALUES ('Melbourne Central', '10:30', '01:00'), ('Mildura', '09:30', '23:30')) AS h (cinema, opens, closes)
+JOIN cinemas c ON c.name = h.cinema, generate_series(0, 6) AS d;
+
+-- Both close on Christmas Day; the city site stays open late six days out.
+INSERT INTO cinema_hour_exceptions (cinema_id, day, opens, closes, note)
+SELECT cinema_id, make_date(extract(year FROM now() AT TIME ZONE 'Australia/Sydney')::int, 12, 25), NULL::time, NULL::time, 'Christmas Day'
+FROM cinemas
+UNION ALL
+SELECT cinema_id, (now() AT TIME ZONE 'Australia/Sydney')::date + 6, '10:30', '02:00', 'Late-night marathon'
+FROM cinemas WHERE name = 'Melbourne Central';
+
 INSERT INTO seats (room_id, row_label, seat_number, seat_type)
 SELECT r.room_id, row_label, n,
     CASE
