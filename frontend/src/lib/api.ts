@@ -28,6 +28,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       method,
       headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
+    }).catch(() => {
+      // fetch only rejects when the request never got a response; its own message ("Failed to fetch") means nothing to users.
+      throw new ApiError(0, "Couldn't reach the server. Check your connection and try again.")
     })
 
   const seen = refreshes

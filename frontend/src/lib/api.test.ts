@@ -51,6 +51,11 @@ describe("api", () => {
     expect(err).toMatchObject({ status: 401, message: "signed out" });
   });
 
+  it("explains a dropped connection in words", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("Failed to fetch"); }));
+    await expect(api.get("/user")).rejects.toMatchObject({ status: 0, message: expect.stringMatching(/^Couldn't reach the server/) });
+  });
+
   it("explains rate limits in words", async () => {
     fakeServer();
     await expect(api.get("/busy")).rejects.toThrow("Too many attempts");
