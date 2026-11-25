@@ -565,6 +565,11 @@ a.back {
   }
 }
 
+/* The cinema picker on a film's page */
+h1 + .fields {
+  margin-top: 24px;
+}
+
 .listing {
   margin: 0;
   padding: 0;

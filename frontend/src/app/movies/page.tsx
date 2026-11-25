@@ -2,6 +2,8 @@ import {
   formatDay,
   formatRuntime,
   formatTime,
+  MAX_CINEMAS,
+  savedCinemas,
   slug,
   showtimesFor,
   upcomingDays,
@@ -24,11 +26,22 @@ export default function Films({
   // The day lives in the URL (?day=1), so refresh, Back and shared links keep it.
   const [params, setParams] = useSearchParams();
   const day = Math.max(0, Math.min(Math.trunc(Number(params.get("day"))) || 0, days.length - 1));
-  const onDay = (i: number) => setParams(i ? { day: String(i) } : {}, { replace: true });
+  const setParam = (key: string, value: string) =>
+    setParams((p) => (value ? p.set(key, value) : p.delete(key), p), { replace: true });
+  const onDay = (i: number) => setParam("day", i ? String(i) : "");
   const now = new Date();
   const shown = movieSlug
     ? movies?.filter((m) => slug(m.title) === movieSlug)
     : movies;
+  // A film's times are for one cinema at a time: the one in the URL, else the last one chosen that shows it.
+  const cinemas = [...new Map(shown?.[0]?.showings.map((s) => [s.cinemaID, s.cinema]))]
+    .sort((a, b) => a[1].localeCompare(b[1]));
+  const ids = cinemas.map(([id]) => id);
+  const cinema = [params.get("cinema"), ...savedCinemas()].find((id) => id && ids.includes(id)) ?? "";
+  function onCinema(id: string) {
+    setParam("cinema", id);
+    if (id) localStorage.setItem("cinemas", [id, ...savedCinemas().filter((c) => c !== id)].slice(0, MAX_CINEMAS).join(","));
+  }
   useTitle((movieSlug && shown?.[0]?.title) || "Now showing");
 
   return (
@@ -42,7 +55,20 @@ export default function Films({
         <h1 tabIndex={-1}>
           {movieSlug ? (shown?.[0]?.title ?? "Film") : "Now showing"}
         </h1>
-        {movieSlug && (
+        {movieSlug && cinemas.length > 0 && (
+          <div className="fields">
+            <label className="plain">
+              <span>Cinema</span>
+              <select value={cinema} onChange={(e) => onCinema(e.target.value)}>
+                <option value="" disabled>Select a cinema</option>
+                {cinemas.map(([id, name]) => (
+                  <option key={id} value={id}>{name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+        {movieSlug && cinema && (
           <nav className="days" aria-label="Day">
             {days.map((d, i) => (
               <button key={i} aria-pressed={i === day} onClick={() => onDay(i)}>
@@ -68,7 +94,7 @@ export default function Films({
         <ul className="listing">
           {shown?.map((movie) => {
             const sessions = showtimesFor(movie, days[day]).filter(
-              (s) => s.start > now,
+              (s) => s.start > now && s.cinemaID === cinema,
             );
             return (
               <li key={movie.movieID} className="film">
@@ -97,7 +123,11 @@ export default function Films({
                     <span className="rating">{movie.rating}</span>
                   </p>
                   <p className="synopsis">{movie.synopsis}</p>
-                  {!movieSlug ? null : sessions.length ? (
+                  {!movieSlug ? null : !cinemas.length ? (
+                    <p className="none">No sessions in the next few days.</p>
+                  ) : !cinema ? (
+                    <p className="none">Select a cinema to see session times.</p>
+                  ) : sessions.length ? (
                     <div className="times">
                       {sessions.map((s) => (
                         <Link
