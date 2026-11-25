@@ -916,7 +916,7 @@ h1 + .fields {
     text-overflow: ellipsis;
     white-space: nowrap;
 
-    &:hover {
+    &:hover:not(.primary) {
       background: var(--curtain);
     }
   }
