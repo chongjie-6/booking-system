@@ -1,0 +1,91 @@
+.carousel {
+  --per: 4.3;
+  --gap: 20px;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: calc((100% - (var(--per) - 1) * var(--gap)) / var(--per));
+  gap: var(--gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  cursor: grab;
+  user-select: none;
+  mask-image: linear-gradient(to right, #000 92%, rgb(0 0 0 / 0.2));
+
+  &.dragging {
+    cursor: grabbing;
+  }
+
+  @media (max-width: 800px) {
+    --per: 2.8;
+  }
+
+  @media (max-width: 600px) {
+    --per: 1.9;
+    --gap: 12px;
+  }
+
+  .poster {
+    transition: transform 0.3s ease-out;
+  }
+
+  li:has(a:hover) .poster {
+    transform: translateY(-4px);
+  }
+
+  h2 {
+    margin-top: 14px;
+    font-size: 1.25rem;
+    line-height: 1.1;
+  }
+
+  .meta {
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0 0;
+    font-size: 0.875rem;
+  }
+}
+
+.carousel-nav {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+
+  button {
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: none;
+    font-size: 1.5rem;
+    line-height: 1;
+
+    &:hover {
+      border-color: var(--brass);
+      color: var(--brass);
+    }
+  }
+}
+
+.soon {
+  margin-top: 56px;
+
+  .section-head h2 {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+  }
+
+  /* Looks like the carousel's h2; h3 here as it sits under the section's h2. */
+  h3 {
+    margin: 14px 0 0;
+    font-family: var(--display);
+    font-size: 1.25rem;
+    font-weight: 800;
+    line-height: 1.1;
+    text-transform: uppercase;
+  }
+}

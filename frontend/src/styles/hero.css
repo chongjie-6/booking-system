@@ -1,0 +1,150 @@
+.hero {
+  --hero-height: min(78svh, 640px);
+  position: relative;
+  height: var(--hero-height);
+  margin: 0 calc(50% - 50vw) 40px;
+  overflow: hidden;
+  background: var(--curtain);
+
+  @media (max-width: 600px) {
+    --hero-height: min(70svh, 520px);
+  }
+}
+
+/* The current slide, flanked by its neighbours; vertical swipes still scroll the page. */
+.hero-track {
+  display: flex;
+  height: 100%;
+  touch-action: pan-y;
+  user-select: none;
+
+  .hero:has(.hero-nav) & {
+    cursor: grab;
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+
+  /* The carousel's 700ms ease-out cubic. */
+  &.settling {
+    transition: translate 0.7s cubic-bezier(0.33, 1, 0.68, 1);
+  }
+}
+
+.hero-slide {
+  position: relative;
+  display: flex;
+  flex: 0 0 100%;
+  align-items: flex-end;
+  overflow: hidden;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(to top, var(--velvet), transparent 55%),
+      linear-gradient(to right, rgb(0 0 0 / 0.7), transparent 65%);
+  }
+
+  /* Leaves room for the dots, which stay put while the slides move. */
+  .hero:has(.hero-nav) & .hero-body {
+    padding-bottom: 88px;
+  }
+}
+
+.hero > .hero-nav {
+  position: absolute;
+  inset: auto 0 0;
+  pointer-events: none;
+
+  button {
+    pointer-events: auto;
+  }
+}
+
+.hero-media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+}
+
+/* An iframe can't object-fit, so size the 16:9 player to cover the banner and centre it.
+   The scale crops the black bars of trailers letterboxed to 2.39:1 inside a 16:9 video. */
+.hero-video {
+  inset: 50% auto auto 50%;
+  width: max(100%, var(--hero-height) * 16 / 9);
+  height: auto;
+  aspect-ratio: 16 / 9;
+  translate: -50% -50%;
+  scale: 1.35;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.6s;
+
+  &[data-playing] {
+    opacity: 1;
+  }
+}
+
+.hero-body {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 0 16px 40px;
+
+  h2 {
+    max-width: 14ch;
+    font-size: clamp(2.25rem, 6vw, 4rem);
+  }
+
+}
+
+.hero-tag {
+  display: inline-block;
+  margin-bottom: 12px;
+  padding: 2px 8px;
+  background: var(--brass);
+  color: var(--ink);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.hero-synopsis {
+  display: -webkit-box;
+  color: var(--grey);
+  max-width: 60ch;
+  margin: 12px 0 24px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.hero-dots {
+  display: flex;
+  gap: 8px;
+  margin-top: 24px;
+
+  button {
+    width: 32px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    background: linear-gradient(var(--muted), var(--muted)) center / 100% 3px no-repeat;
+    opacity: 0.5;
+
+    &[aria-pressed='true'] {
+      opacity: 1;
+      background-image: linear-gradient(var(--paper), var(--paper));
+    }
+  }
+}

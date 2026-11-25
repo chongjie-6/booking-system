@@ -1,0 +1,261 @@
+body:has(.drawer[open]) {
+  overflow: hidden;
+}
+
+/* The dialog itself has no padding, so a click whose target is the dialog landed on the backdrop. */
+.drawer {
+  inset: 0 0 0 auto;
+  width: min(440px, 100%);
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--curtain);
+  background: var(--velvet);
+  color: var(--paper);
+  translate: 100% 0;
+  transition:
+    translate 0.3s ease,
+    overlay 0.3s allow-discrete,
+    display 0.3s allow-discrete;
+
+  &[open] {
+    translate: 0;
+  }
+
+  &::backdrop {
+    background: rgb(0 0 0 / 0.55);
+    backdrop-filter: blur(8px);
+    opacity: 0;
+    transition:
+      opacity 0.3s,
+      overlay 0.3s allow-discrete,
+      display 0.3s allow-discrete;
+  }
+
+  &[open]::backdrop {
+    opacity: 1;
+  }
+
+  .close {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    margin-left: auto;
+    margin-bottom: 8px;
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    background: none;
+
+    &:hover {
+      border-color: var(--paper);
+    }
+  }
+}
+
+/* The drawer as a centred dialog, rising into place, for pickers. */
+.drawer.modal {
+  inset: 0;
+  width: min(640px, calc(100% - 32px));
+  height: fit-content;
+  max-height: min(84svh, 720px);
+  margin: auto;
+  border: 1px solid var(--curtain);
+  border-radius: 12px;
+  translate: 0;
+  opacity: 1;
+  transition:
+    opacity 0.2s,
+    translate 0.2s ease-out,
+    overlay 0.2s allow-discrete,
+    display 0.2s allow-discrete;
+
+  &:not([open]) {
+    opacity: 0;
+    translate: 0 16px;
+  }
+
+  .drawer-body {
+    padding: 20px 24px 0;
+  }
+
+  h2 {
+    margin: -48px 48px 0 0;
+    font-size: 1.75rem;
+  }
+
+  .days {
+    margin: 16px 0;
+  }
+}
+
+.pick-hint {
+  margin: 2px 0 16px;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.locate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin: -8px 0 16px;
+  font-size: 0.875rem;
+
+  .link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .note {
+    color: var(--muted);
+  }
+
+  [role='status'] {
+    color: var(--error);
+  }
+}
+
+.pick-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 10px;
+    border-bottom: 1px solid var(--curtain);
+    border-radius: 6px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--curtain);
+    }
+
+    &:has(:disabled) {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  small {
+    display: block;
+    color: var(--muted);
+    font-size: 0.8125rem;
+
+    b {
+      color: var(--paper);
+      font-weight: 600;
+    }
+  }
+
+  input {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--brass);
+  }
+}
+
+.pick-search {
+  width: 100%;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--curtain);
+  color: var(--paper);
+  font: inherit;
+}
+
+.pick-posters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  label {
+    position: relative;
+    display: block;
+    cursor: pointer;
+  }
+
+  /* The tick sits on the poster's corner; a chosen poster gets a brass ring. */
+  input {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 1;
+    width: 20px;
+    height: 20px;
+    accent-color: var(--brass);
+  }
+
+  .poster {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+  }
+
+  label:has(:checked) .poster {
+    outline-color: var(--brass);
+  }
+
+  span:last-child {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.8125rem;
+    line-height: 1.25;
+  }
+}
+
+/* Stays at the bottom of the dialog while the list scrolls under it. */
+.pick-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 20px -24px 0;
+  padding: 16px 24px;
+  border-top: 1px solid var(--curtain);
+  background: var(--velvet);
+
+  .primary {
+    margin-left: auto;
+  }
+}
+
+@starting-style {
+  .drawer.modal[open] {
+    opacity: 0;
+    translate: 0 16px;
+  }
+
+  .drawer[open]:not(.modal) {
+    translate: 100% 0;
+  }
+
+  .drawer[open]::backdrop {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer,
+  .drawer::backdrop {
+    transition: none;
+  }
+}
+
+.drawer-body {
+  padding: 24px 32px 48px;
+}

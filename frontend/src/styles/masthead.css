@@ -1,0 +1,78 @@
+.masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  /* Spans the window, with its content kept in line with #root's. */
+  margin: 0 calc(50% - 50vw) 32px;
+  padding: 20px max(16px, 50vw - 504px);
+  border-bottom: 1px solid var(--curtain);
+  background: rgb(36 8 15 / 0.85);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+/* Over the featured banner, the masthead floats as clearer frosted glass. */
+#root:has(.hero) .masthead {
+  position: fixed;
+  inset: 0 0 auto;
+  margin: 0;
+  padding-inline: max(16px, 50% - 504px);
+  border-bottom-color: rgb(255 255 255 / 0.12);
+  background: linear-gradient(rgb(36 8 15 / 0.2), rgb(10 2 4 / 0.6));
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+
+  .wordmark,
+  .account,
+  .link {
+    color: #fff;
+  }
+
+  /* Fades in once the banner has scrolled away, so the glass turns solid. A gradient can't transition, opacity can. */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: var(--velvet);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+}
+
+#root:has(.hero[data-past]) .masthead {
+  border-bottom-color: var(--curtain);
+
+  &::before {
+    opacity: 1;
+  }
+}
+
+.wordmark {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: 800 1.75rem/1 var(--display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brass);
+  text-decoration: none;
+}
+
+.link.signin {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.account {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  color: var(--muted);
+}

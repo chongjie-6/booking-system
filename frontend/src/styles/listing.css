@@ -1,0 +1,68 @@
+:is(.film, .carousel li) :is(h2, h3) a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.film h2 a {
+  background: linear-gradient(currentColor, currentColor) left bottom / 0 0.08em no-repeat;
+  transition: background-size 0.3s ease-out;
+
+  &:hover,
+  &:focus-visible,
+  .film:has(a:hover) & {
+    background-size: 100% 0.08em;
+  }
+}
+
+.listing {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.film {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 28px;
+  padding: 28px 0;
+  border-bottom: 1px solid var(--curtain);
+
+  @media (max-width: 600px) {
+    grid-template-columns: 84px minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+
+/* A film's sessions on the sessions page, one block per cinema and day. */
+.where h3 {
+  margin: 20px 0 0;
+  font: 600 0.9375rem var(--sans);
+  color: var(--muted);
+}
+
+.where .times {
+  margin-top: 8px;
+}
+
+.times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+
+  a {
+    padding: 10px 16px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: var(--curtain);
+    color: inherit;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-decoration: none;
+  }
+
+  a:hover {
+    border-color: var(--brass);
+    color: var(--brass);
+  }
+}

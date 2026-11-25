@@ -1,0 +1,142 @@
+/* Forms */
+
+.fields {
+  display: grid;
+  gap: 20px;
+  max-width: 420px;
+
+  input {
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--curtain);
+    color: var(--paper);
+    font: inherit;
+    font-weight: 400;
+  }
+
+  input:focus-visible {
+    border-color: var(--brass);
+    outline-offset: 0;
+  }
+}
+
+.fields .group {
+  display: grid;
+  gap: 12px;
+}
+
+.fields .pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.fields select,
+.fields textarea {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--curtain);
+  color: var(--paper);
+  font: inherit;
+
+  &:focus-visible {
+    border-color: var(--brass);
+    outline-offset: 0;
+  }
+}
+
+/* A label above its control, for selects, textareas and date pickers, which can't hold a floating label. */
+.plain {
+  display: grid;
+  gap: 6px;
+
+  span {
+    color: var(--muted);
+    font-size: 0.875rem;
+  }
+}
+
+.check {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+
+  input {
+    width: 20px;
+    height: 20px;
+    accent-color: var(--brass);
+  }
+}
+
+/* Stripe's card form; it sizes itself once loaded. */
+.card:empty {
+  display: none;
+}
+
+.rule {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+/* An input that holds its own label. placeholder=" " lets :placeholder-shown tell an empty input from a filled one. */
+.float {
+  position: relative;
+  display: grid;
+
+  span {
+    position: absolute;
+    top: 50%;
+    left: 15px;
+    translate: 0 -50%;
+    color: var(--muted);
+    pointer-events: none;
+    transition:
+      top 0.15s,
+      translate 0.15s,
+      font-size 0.15s;
+  }
+
+  input {
+    min-width: 0;
+    padding: 24px 14px 8px;
+  }
+
+  &:has(input:focus, input:not(:placeholder-shown), input:autofill) span {
+    top: 8px;
+    translate: 0;
+    font-size: 0.75rem;
+  }
+
+  &:has(button) input {
+    padding-right: 48px;
+  }
+
+  button {
+    position: absolute;
+    top: 50%;
+    right: 14px;
+    display: flex;
+    translate: 0 -50%;
+  }
+}
+
+.actions {
+  display: grid;
+  gap: 10px;
+}
+
+.switch {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 28px;
+  border-top: 1px solid var(--curtain);
+
+  p {
+    margin: 0;
+    color: var(--muted);
+  }
+}

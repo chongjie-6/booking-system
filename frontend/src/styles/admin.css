@@ -1,0 +1,67 @@
+/* Admin */
+
+.admin {
+  display: grid;
+  gap: 40px;
+
+  section {
+    display: grid;
+    gap: 16px;
+  }
+
+  h3 {
+    margin: 12px 0 0;
+    font-size: 1rem;
+  }
+}
+
+.admin-film {
+  padding: 16px;
+  border: 1px solid var(--curtain);
+  border-radius: 6px;
+
+  summary {
+    cursor: pointer;
+    color: var(--muted);
+
+    strong {
+      color: var(--paper);
+    }
+  }
+}
+
+.admin-film-body {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.showings {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    gap: 8px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--curtain);
+  }
+
+  p {
+    margin: 0;
+  }
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+
+  p {
+    margin: 0;
+  }
+}

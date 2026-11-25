@@ -1,0 +1,111 @@
+.days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 24px 0 8px;
+
+  button {
+    padding: 8px 18px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: none;
+    color: var(--muted);
+  }
+
+  button[aria-pressed='true'] {
+    border-color: var(--paper);
+    background: var(--paper);
+    color: var(--ink);
+    font-weight: 600;
+  }
+}
+
+/* Search sessions by cinema, film and day. Rides up over the hero's bottom edge when there is one. */
+.quickbook {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: stretch;
+  margin: 24px 0 40px;
+  padding: 6px;
+  border: 1px solid var(--curtain);
+  border-radius: 999px;
+  background: rgb(36 8 15 / 0.92);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.4);
+
+  .hero + & {
+    margin-top: -76px;
+  }
+
+  > button,
+  .quickbook-field > button:first-child {
+    min-width: 0;
+    padding: 8px 20px;
+    border: 0;
+    border-radius: 999px;
+    background: none;
+    overflow: hidden;
+    text-align: left;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &:hover:not(.primary) {
+      background: var(--curtain);
+    }
+  }
+
+  small {
+    display: block;
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  > .primary {
+    padding: 0 28px;
+    background: var(--brass);
+
+    &:hover {
+      background: var(--brass-hover);
+    }
+  }
+
+  @media (max-width: 700px) {
+    grid-template-columns: 1fr;
+    border-radius: 16px;
+
+    > .primary {
+      padding: 14px;
+      text-align: center;
+    }
+  }
+}
+
+.quickbook-field {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+
+  > button:first-child {
+    flex: 1;
+  }
+
+  .clear {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    margin-right: 6px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--curtain);
+    color: var(--muted);
+
+    &:hover {
+      color: var(--paper);
+    }
+  }
+}

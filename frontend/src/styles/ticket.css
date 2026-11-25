@@ -1,0 +1,72 @@
+/* Ticket */
+
+.ticket {
+  --stub: 104px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--stub);
+  max-width: 520px;
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+  /* Punch a notch into the top and bottom edge where the stub tears off. */
+  mask:
+    radial-gradient(circle 12px at calc(100% - var(--stub)) 0, #0000 98%, #000) top / 100% 51% no-repeat,
+    radial-gradient(circle 12px at calc(100% - var(--stub)) 100%, #0000 98%, #000) bottom / 100% 51% no-repeat;
+
+  h2 {
+    margin: 6px 0 18px;
+    font-size: clamp(1.75rem, 5vw, 2.25rem);
+  }
+
+  dl {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: baseline;
+    gap: 6px 20px;
+    margin: 0;
+  }
+
+  dt {
+    color: var(--ink-soft);
+    font-size: 0.875rem;
+  }
+
+  dd {
+    margin: 0;
+    font-weight: 600;
+  }
+}
+
+.ticket-main {
+  padding: 24px 24px 24px 28px;
+}
+
+.house {
+  font: 700 1.125rem/1 var(--display);
+  color: var(--seat-free);
+}
+
+.stub {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 8px;
+  border-left: 2px dashed rgb(42 10 18 / 0.3);
+  text-align: center;
+
+  span {
+    color: var(--ink-soft);
+    font-size: 0.8125rem;
+  }
+
+  strong {
+    margin-bottom: 12px;
+    font: 800 3.5rem/1 var(--display);
+  }
+}
+
+.ref {
+  font: 800 1.25rem/1.1 var(--display);
+  letter-spacing: 0.06em;
+}

@@ -1,0 +1,153 @@
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+
+  &:hover {
+    color: var(--paper);
+  }
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 10px 0 12px;
+  color: var(--muted);
+}
+
+.back {
+  margin-bottom: 20px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+a.back {
+  display: inline-block;
+}
+
+.back::before {
+  content: '‹ ';
+}
+
+.primary {
+  padding: 14px 24px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--brass);
+  color: var(--ink);
+  font-weight: 700;
+
+  &:hover:not(:disabled) {
+    background: var(--brass-hover);
+  }
+
+  &:disabled {
+    background: var(--curtain);
+    color: var(--muted);
+  }
+
+  &:is(a) {
+    display: inline-block;
+    text-decoration: none;
+  }
+}
+
+.secondary {
+  padding: 13px 24px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: none;
+  font-weight: 700;
+
+  &:hover {
+    border-color: var(--brass);
+    color: var(--brass);
+  }
+}
+
+.poster {
+  display: flex;
+  align-items: flex-end;
+  aspect-ratio: 2 / 3;
+  padding: 12px;
+  border-radius: 4px;
+  background: linear-gradient(hsl(var(--hue) 45% 38%), hsl(var(--hue) 55% 16%));
+
+  span {
+    font: 800 1.5rem/0.9 var(--display);
+    text-transform: uppercase;
+    color: hsl(var(--hue) 70% 86%);
+
+    @media (max-width: 600px) {
+      font-size: 0.95rem;
+    }
+  }
+
+  @media (max-width: 600px) {
+    padding: 8px;
+  }
+
+  &:has(img) {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+
+  h1 {
+    font-size: clamp(1.75rem, 4vw, 2.5rem);
+  }
+}
+
+.credits {
+  margin: 48px 0 24px;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.rating {
+  padding: 0 6px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.synopsis {
+  max-width: 60ch;
+  color: var(--grey);
+}
+
+.none {
+  margin-top: 18px;
+  color: var(--muted);
+}
+
+.hint {
+  color: var(--brass);
+  font-size: 0.875rem;
+}
+
+.error {
+  color: var(--error);
+}

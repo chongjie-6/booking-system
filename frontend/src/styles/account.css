@@ -1,0 +1,37 @@
+/* Account */
+
+.account-page {
+  display: grid;
+  gap: 48px;
+
+  section {
+    display: grid;
+    gap: 20px;
+  }
+}
+
+.bookings {
+  display: grid;
+  gap: 20px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    gap: 8px;
+    justify-items: start;
+  }
+
+  &.past .ticket {
+    opacity: 0.6;
+  }
+}
+
+.settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 48px;
+  padding-top: 40px;
+  border-top: 1px solid var(--curtain);
+}

@@ -1,0 +1,274 @@
+.session-head {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 20px;
+  align-items: end;
+
+  .poster:not(:has(img)) {
+    padding: 8px;
+
+    span {
+      font-size: 0.95rem;
+    }
+  }
+
+  @media (max-width: 600px) {
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 14px;
+  }
+}
+
+/* Seats */
+
+.auditorium {
+  position: relative;
+  margin: 40px -16px 24px;
+  padding-block: 4px;
+  overflow-x: auto;
+
+  /* Light thrown from the screen onto the front rows. */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: 75%;
+    background: radial-gradient(ellipse 55% 100% at 50% 0, rgb(244 231 208 / 0.16), transparent 70%);
+    pointer-events: none;
+    animation: lights-up 1.8s ease-out both;
+  }
+}
+
+@keyframes lights-up {
+  from {
+    opacity: 0;
+  }
+}
+
+.screen {
+  height: 28px;
+  margin: 0 10%;
+  border-top: 4px solid var(--paper);
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  filter: drop-shadow(0 -4px 10px rgb(244 231 208 / 0.6));
+}
+
+.seats {
+  display: grid;
+  gap: var(--seat-gap);
+  justify-content: center;
+  min-width: max-content;
+  margin-top: 16px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--seat-gap);
+}
+
+.row-label {
+  width: 1rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+
+  &:last-child {
+    @media (max-width: 480px) {
+      display: none;
+    }
+  }
+}
+
+.seat {
+  display: grid;
+  place-items: center;
+  width: var(--seat-size);
+  height: var(--seat-size);
+  padding: 0;
+  line-height: 1;
+  border: 0;
+  border-radius: 40% 40% 18% 18%;
+  background: var(--seat-free);
+  color: var(--ink);
+  font-size: calc(var(--seat-size) * 0.42);
+  font-weight: 700;
+
+  &[data-type='wheelchair']:not([aria-pressed='true']) {
+    font-size: calc(var(--seat-size) * 0.7);
+  }
+  transition:
+    background-color 0.15s,
+    transform 0.15s ease-out;
+
+  /* Touch screens keep :hover after a tap, which would hide the selected colour. */
+  @media (hover: hover) {
+    &:hover:not(:disabled, [aria-pressed='true']) {
+      background: var(--seat-hover);
+    }
+  }
+
+  &[aria-pressed='true'] {
+    background: var(--brass);
+    transform: scale(1.08);
+  }
+
+  &:disabled {
+    background: var(--seat-taken);
+    color: var(--muted);
+  }
+}
+
+/* Seat types are told apart by shape and marks as well as by label, for people who can't see the colours. */
+[data-type='companion'] {
+  box-shadow: inset 0 0 0 2px var(--paper);
+}
+
+[data-type='premium'] {
+  box-shadow: inset 0 -4px 0 var(--brass);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 24px;
+  margin: 0 0 24px;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.875rem;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+.swatch {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 40% 40% 18% 18%;
+  background: var(--seat-free);
+  color: var(--ink);
+  font-size: 0.75rem;
+  line-height: 1;
+
+  &[data-type='wheelchair'] {
+    font-size: 1rem;
+  }
+
+  &.selected {
+    background: var(--brass);
+  }
+
+  &.taken {
+    background: var(--seat-taken);
+  }
+}
+
+.tray {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 24px;
+  margin: 0 -16px;
+  padding: 16px;
+  border-top: 1px solid var(--curtain);
+  background: var(--velvet);
+
+  > div {
+    flex: 1 1 220px;
+  }
+}
+
+.total {
+  font: 800 2rem/1 var(--display);
+  font-variant-numeric: tabular-nums;
+}
+
+.hold {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  padding: 14px 16px;
+  border: 1px solid var(--curtain);
+  border-radius: 6px;
+
+  strong {
+    color: var(--brass);
+    font-variant-numeric: tabular-nums;
+  }
+
+  &.warn {
+    border-color: var(--brass);
+  }
+}
+
+/* Booking progress: Seats › Payment › Confirmed */
+
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 0.875rem;
+
+  li + li::before {
+    content: '›';
+    margin-right: 8px;
+  }
+
+  [aria-current] {
+    color: var(--brass);
+    font-weight: 700;
+  }
+}
+
+/* Checkout */
+
+.checkout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 48px;
+  align-items: start;
+  margin-top: 32px;
+
+  @media (max-width: 760px) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+}
+
+/* Confirmation */
+
+.done {
+  display: grid;
+  justify-items: start;
+  gap: 24px;
+
+  > p {
+    max-width: 52ch;
+    color: var(--muted);
+  }
+
+  .ticket {
+    width: 100%;
+    animation: print 0.7s ease-out both;
+  }
+}
+
+@keyframes print {
+  from {
+    clip-path: inset(0 0 100% 0);
+    transform: translateY(-16px);
+  }
+}
