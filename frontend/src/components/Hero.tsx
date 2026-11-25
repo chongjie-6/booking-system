@@ -20,6 +20,10 @@ export function Hero({ movies }: { movies: Movie[] }) {
   // The film a dot was pressed for: it stands in as the slide being eased to.
   const [jump, setJump] = useState<number | null>(null);
   const drag = useRef({ active: false, moved: false, x: 0 });
+  // The trailer that YouTube says is playing. The player stays hidden until then, so a browser that can't play it
+  // (or blocks autoplay) keeps the backdrop instead of a black box.
+  const video = useRef<HTMLIFrameElement>(null);
+  const [playing, setPlaying] = useState<string>();
   const n = movies.length;
   const loop = n > 1;
   const at = (k: number) =>
@@ -45,6 +49,16 @@ export function Hero({ movies }: { movies: Movie[] }) {
     const t = setTimeout(() => setSettle(1), AUTO_MS);
     return () => clearTimeout(t);
   }, [auto, i, settle, dx]);
+
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      const v = video.current;
+      if (!v || e.source !== v.contentWindow || typeof e.data !== "string") return;
+      if (JSON.parse(e.data).info?.playerState === 1) setPlaying(v.dataset.key);
+    };
+    addEventListener("message", onMessage);
+    return () => removeEventListener("message", onMessage);
+  }, []);
 
   if (!shown) return null;
 
@@ -125,8 +139,18 @@ export function Hero({ movies }: { movies: Movie[] }) {
               {trailer && (
                 <iframe
                   key={movie.trailerKey}
+                  ref={video}
+                  data-key={movie.trailerKey}
+                  data-playing={playing === movie.trailerKey || undefined}
                   className="hero-media hero-video"
-                  src={`https://www.youtube-nocookie.com/embed/${movie.trailerKey}?autoplay=1&mute=1&loop=1&playlist=${movie.trailerKey}&controls=0&disablekb=1&playsinline=1&rel=0`}
+                  src={`https://www.youtube-nocookie.com/embed/${movie.trailerKey}?autoplay=1&mute=1&loop=1&playlist=${movie.trailerKey}&controls=0&disablekb=1&playsinline=1&rel=0&enablejsapi=1&origin=${location.origin}`}
+                  // Asks the player to post its state, which is how it says it's playing.
+                  onLoad={(e) =>
+                    e.currentTarget.contentWindow?.postMessage(
+                      JSON.stringify({ event: "listening", id: 1, channel: "widget" }),
+                      "https://www.youtube-nocookie.com",
+                    )
+                  }
                   title={`${movie.title} trailer`}
                   allow="autoplay; encrypted-media"
                   tabIndex={-1}
