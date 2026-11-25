@@ -47,6 +47,8 @@ export default function App() {
   // undefined while loading, null if it failed
   const [movies, setMovies] = useState<Movie[] | null>();
   const [moviesAttempt, setMoviesAttempt] = useState(0);
+  // Coming soon is nice to have, so a failure just leaves it empty.
+  const [soon, setSoon] = useState<Movie[]>();
   // undefined while the first lookup runs, null when signed out
   const [user, setUser] = useState<User | null>();
   const [signOutFailed, setSignOutFailed] = useState(false);
@@ -69,6 +71,12 @@ export default function App() {
   useEffect(() => {
     api.get<Movie[]>("/movies").then(setMovies, () => setMovies(null));
   }, [moviesAttempt]);
+
+  useEffect(() => {
+    api.get<Movie[]>("/movies/coming-soon").then(setSoon, () => setSoon([]));
+  }, []);
+  // Every film with a showing, so a coming-soon film's sessions can be booked too.
+  const allMovies = movies && soon && [...movies, ...soon];
 
   // A layout effect, so a hold is released before the seat map's own effect asks which seats are taken.
   useLayoutEffect(() => {
@@ -184,14 +192,14 @@ export default function App() {
         <Routes>
           <Route
             path="/"
-            element={<Home movies={movies} onRetry={retryMovies} />}
+            element={<Home movies={movies} soon={soon ?? []} onRetry={retryMovies} />}
           />
           {["/movies", "/movies/:movie"].map((path) => (
             <Route
               key={path}
               path={path}
               element={
-                <Films movies={movies} onRetry={retryMovies} />
+                <Films movies={movies} soon={soon} onRetry={retryMovies} />
               }
             />
           ))}
@@ -203,7 +211,7 @@ export default function App() {
             path="/sessions/:eventID"
             element={
               <Session
-                movies={movies}
+                movies={allMovies}
                 onRetry={retryMovies}
                 title="Choose seats"
               >
@@ -226,7 +234,7 @@ export default function App() {
             element={
               // Checkout opened from a bookmark has no seats chosen yet.
               chosen.length ? (
-                <Session movies={movies} onRetry={retryMovies} title="Checkout">
+                <Session movies={allMovies} onRetry={retryMovies} title="Checkout">
                   {(showtime) => (
                     <Checkout
                       showtime={showtime}

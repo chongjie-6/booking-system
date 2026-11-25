@@ -16,23 +16,29 @@ import { useTitle } from "@/lib/routes";
 
 export default function Films({
   movies,
+  soon,
   onRetry,
 }: {
   movies: Movie[] | null | undefined;
+  soon: Movie[] | undefined;
   onRetry: () => void;
 }) {
   const { movie: movieSlug } = useParams();
-  const days = upcomingDays();
+  const now = new Date();
+  const shown = movieSlug
+    ? movies && soon && [...movies, ...soon].filter((m) => slug(m.title) === movieSlug)
+    : movies;
+  // A coming-soon film's days are the ones it has showings on; anything else gets today and the next two.
+  const opening = !!shown?.[0] && !movies?.includes(shown[0]);
+  const days = opening
+    ? [...new Set(shown![0].showings.map((s) => new Date(s.startsAt).toDateString()))].map((d) => new Date(d))
+    : upcomingDays();
   // The day lives in the URL (?day=1), so refresh, Back and shared links keep it.
   const [params, setParams] = useSearchParams();
   const day = Math.max(0, Math.min(Math.trunc(Number(params.get("day"))) || 0, days.length - 1));
   const setParam = (key: string, value: string) =>
     setParams((p) => (value ? p.set(key, value) : p.delete(key), p), { replace: true });
   const onDay = (i: number) => setParam("day", i ? String(i) : "");
-  const now = new Date();
-  const shown = movieSlug
-    ? movies?.filter((m) => slug(m.title) === movieSlug)
-    : movies;
   // A film's times are for one cinema at a time: the one in the URL, else the last one chosen that shows it.
   const cinemas = [...new Map(shown?.[0]?.showings.map((s) => [s.cinemaID, s.cinema]))]
     .sort((a, b) => a[1].localeCompare(b[1]));
@@ -72,7 +78,7 @@ export default function Films({
           <nav className="days" aria-label="Day">
             {days.map((d, i) => (
               <button key={i} aria-pressed={i === day} onClick={() => onDay(i)}>
-                {i === 0 ? "Today" : i === 1 ? "Tomorrow" : formatDay(d)}
+                {opening ? formatDay(d) : i === 0 ? "Today" : i === 1 ? "Tomorrow" : formatDay(d)}
               </button>
             ))}
           </nav>
@@ -143,7 +149,7 @@ export default function Films({
                     </div>
                   ) : (
                     <p className="none">
-                      {day === 0
+                      {day === 0 && !opening
                         ? "No more sessions today."
                         : `No sessions on ${formatDay(days[day])}.`}
                       {day < days.length - 1 && (
@@ -154,7 +160,7 @@ export default function Films({
                             onClick={() => onDay(day + 1)}
                           >
                             See{" "}
-                            {day === 0 ? "tomorrow" : formatDay(days[day + 1])}
+                            {day === 0 && !opening ? "tomorrow" : formatDay(days[day + 1])}
                           </button>
                         </>
                       )}

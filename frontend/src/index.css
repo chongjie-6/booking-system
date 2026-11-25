@@ -485,7 +485,7 @@ a.back {
   text-decoration: none;
 }
 
-:is(.film, .carousel li) h2 a {
+:is(.film, .carousel li) :is(h2, h3) a {
   color: inherit;
   text-decoration: none;
 }
@@ -788,17 +788,11 @@ h1 + .fields {
   }
 }
 
-/* Not links or a loop, so it scrolls natively and doesn't fade out when the films fit. */
 .soon {
   margin-top: 56px;
 
   .section-head h2 {
     font-size: clamp(1.5rem, 3vw, 2rem);
-  }
-
-  .carousel {
-    cursor: auto;
-    mask-image: none;
   }
 
   /* Looks like the carousel's h2; h3 here as it sits under the section's h2. */

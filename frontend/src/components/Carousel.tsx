@@ -1,11 +1,13 @@
 import { useLayoutEffect, useRef } from "react";
 import { Link } from "react-router";
-import { formatRuntime, slug, type Movie } from "@/lib/data";
+import { formatDay, formatRuntime, slug, type Movie } from "@/lib/data";
 import { Poster } from "@/components/Poster";
 
 const SNAP_MS = 700;
 
-export function Carousel({ movies }: { movies: Movie[] }) {
+// soon: the films are coming soon, so each shows its opening day and has an h3 to sit under the section's h2.
+export function Carousel({ movies, soon = false }: { movies: Movie[]; soon?: boolean }) {
+  const Heading = soon ? "h3" : "h2";
   const track = useRef<HTMLUListElement>(null);
   const drag = useRef({ active: false, moved: false, x: 0, left: 0 });
   const anim = useRef({ running: false, raf: 0, from: 0, to: 0 });
@@ -133,17 +135,18 @@ export function Carousel({ movies }: { movies: Movie[] }) {
             >
               <Poster movie={movie} />
             </Link>
-            <h2>
+            <Heading>
               <Link
                 to={`/movies/${slug(movie.title)}`}
                 tabIndex={copy === 1 ? undefined : -1}
               >
                 {movie.title}
               </Link>
-            </h2>
+            </Heading>
             <p className="meta">
               <span className="rating">{movie.rating}</span>
               <span>{formatRuntime(movie.runtimeMinutes)}</span>
+              {soon && <span>From {formatDay(new Date(movie.showings[0].startsAt))}</span>}
             </p>
           </li>
         )),
